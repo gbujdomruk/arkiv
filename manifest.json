@@ -1,0 +1,25 @@
+{
+  "name": "Ma CDthèque",
+  "short_name": "CDthèque",
+  "description": "Gérez votre collection de CDs",
+  "start_url": "/cdtheque/",
+  "scope": "/cdtheque/",
+  "display": "standalone",
+  "background_color": "#0e0e11",
+  "theme_color": "#0e0e11",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
