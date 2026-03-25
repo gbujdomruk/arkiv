@@ -1007,12 +1007,6 @@ iz.addEventListener('drop',e=>{e.preventDefault();iz.classList.remove('dragover'
 // ═══ INIT ═════════════════════════════════════════════════
 loadLibrary();
 
-// ═══ SERVICE WORKER (PWA offline) ════════════════════════
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  });
-}
 </script>
 </body>
 </html>
