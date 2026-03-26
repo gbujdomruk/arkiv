@@ -7,9 +7,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const DISCOGS_API = 'https://api.discogs.com';
-const DISCOGS_REQUEST_TOKEN_URL = 'https://www.discogs.com/oauth/request_token';
+const DISCOGS_REQUEST_TOKEN_URL = 'https://api.discogs.com/oauth/request_token';
 const DISCOGS_AUTHORIZE_URL = 'https://www.discogs.com/oauth/authorize';
-const DISCOGS_ACCESS_TOKEN_URL = 'https://www.discogs.com/oauth/access_token';
+const DISCOGS_ACCESS_TOKEN_URL = 'https://api.discogs.com/oauth/access_token';
 const USER_AGENT = 'Arkiv/1.0 +https://github.com';
 
 // ─── CORS headers ────────────────────────────────────────
