@@ -1,69 +1,79 @@
-# 💿 Ma CDthèque / My CD Collection
+# 🗄 Arkiv
 
-> Application web progressive (PWA) pour gérer votre collection de CDs, optimisée pour mobile.
-> A progressive web app (PWA) to manage your CD collection, optimised for mobile.
+> Application web personnelle pour gérer toute votre médiathèque.
+> A personal web app to manage your entire media library.
 
 ---
 
 ## 🇫🇷 Français
 
+Arkiv est une application web progressive (PWA) pour cataloguer et retrouver facilement vos médias physiques et numériques.
+
+### Médias supportés
+
+- 🎵 **Musique** — CDs, vinyles, MP3 et autres formats audio
+- 🎬 **Vidéo** — DVDs, Blu-ray et autres supports vidéo
+- 📚 **Livres** — BD, manga, romans, livres numériques
+
 ### Fonctionnalités
 
+- 📷 **Scanner de code-barres** — identifiez un média en pointant la caméra, les informations sont récupérées automatiquement via Discogs
 - 📂 **Import MusicBuddy / Discogs** — chargez votre collection existante en un clic via export CSV
-- 📷 **Scanner de code-barres** — identifiez un CD en pointant la caméra vers son code EAN/UPC, les informations sont récupérées automatiquement via MusicBrainz
-- 🖼 **Pochettes d'albums** — affichage automatique des pochettes depuis Discogs et Cover Art Archive
-- 🔍 **Recherche & filtres** — recherche instantanée par titre ou artiste, filtres par genre, tri multi-critères
-- ⭐ **Favoris** — marquez vos albums préférés
-- 📊 **Statistiques** — vue d'ensemble de votre collection (genres, décennies, artistes)
-- 💾 **Sauvegarde automatique** — votre collection est mémorisée localement, aucune reconnexion nécessaire
-- 📱 **PWA installable** — fonctionne comme une application native sur iPhone et Android
+- 🖼 **Pochettes & visuels** — images récupérées automatiquement depuis Discogs
+- 🔍 **Recherche & filtres** — recherche instantanée, filtres par genre et type de média
+- ⭐ **Favoris** — marquez vos médias préférés
+- 📊 **Statistiques** — vue d'ensemble de votre collection
+- 💾 **Sauvegarde locale** — vos données restent sur votre appareil, aucun compte requis
+- 📱 **PWA installable** — fonctionne comme une app native sur iPhone et Android
 
-### Installation sur iPhone
+### Installation sur iPhone / Android
 
-1. Ouvrez l'URL dans **Safari**
-2. Appuyez sur le bouton **Partager** (icône ↑ en bas de l'écran)
-3. Faites défiler et appuyez sur **"Sur l'écran d'accueil"**
-4. L'application s'installe avec sa propre icône, comme une app native
+1. Ouvrez l'URL dans **Safari** (iPhone) ou **Chrome** (Android)
+2. Appuyez sur **Partager** → **Sur l'écran d'accueil** (iPhone) ou **Installer l'application** (Android)
+3. Arkiv s'installe avec sa propre icône, sans passer par l'App Store
 
-### Importer votre collection
+### Connexion Discogs
 
-1. Depuis MusicBuddy, exportez votre bibliothèque en CSV
-2. Dans l'application, appuyez sur **➕ Ajouter** → **Importer MusicBuddy CSV**
-3. Sélectionnez votre fichier — toute la collection se charge automatiquement
+Arkiv utilise l'API Discogs via OAuth — vous vous connectez avec votre propre compte Discogs, aucun token n'est stocké dans le code.
 
 ---
 
 ## 🇬🇧 English
 
+Arkiv is a progressive web app (PWA) to catalogue and easily browse your physical and digital media collection.
+
+### Supported media
+
+- 🎵 **Music** — CDs, vinyl records, MP3s and other audio formats
+- 🎬 **Video** — DVDs, Blu-rays and other video formats
+- 📚 **Books** — comics, manga, novels, e-books
+
 ### Features
 
+- 📷 **Barcode scanner** — point your camera at any barcode to identify a release; metadata is fetched automatically from Discogs
 - 📂 **MusicBuddy / Discogs import** — load your existing collection in one tap via CSV export
-- 📷 **Barcode scanner** — identify a CD by pointing your camera at its EAN/UPC barcode; info is fetched automatically from MusicBrainz
-- 🖼 **Album artwork** — cover images loaded automatically from Discogs and Cover Art Archive
-- 🔍 **Search & filters** — instant search by title or artist, genre filters, multi-criteria sorting
-- ⭐ **Favourites** — mark your favourite albums
-- 📊 **Statistics** — overview of your collection (genres, decades, top artists)
-- 💾 **Auto-save** — your collection is stored locally, no login required
+- 🖼 **Cover artwork** — images loaded automatically from Discogs
+- 🔍 **Search & filters** — instant search, genre and media-type filters
+- ⭐ **Favourites** — mark your favourite items
+- 📊 **Statistics** — overview of your entire collection
+- 💾 **Local storage** — your data stays on your device, no account required
 - 📱 **Installable PWA** — works like a native app on iPhone and Android
 
-### Install on iPhone
+### Install on iPhone / Android
 
-1. Open the URL in **Safari**
-2. Tap the **Share** button (↑ icon at the bottom of the screen)
-3. Scroll down and tap **"Add to Home Screen"**
-4. The app installs with its own icon, just like a native app
+1. Open the URL in **Safari** (iPhone) or **Chrome** (Android)
+2. Tap **Share** → **Add to Home Screen** (iPhone) or **Install app** (Android)
+3. Arkiv installs with its own icon, no App Store needed
 
-### Import your collection
+### Discogs connection
 
-1. From MusicBuddy, export your library as a CSV file
-2. In the app, tap **➕ Add** → **Import MusicBuddy CSV**
-3. Select your file — your entire collection loads automatically
+Arkiv uses the Discogs API via OAuth — you sign in with your own Discogs account, no token is ever stored in the source code.
 
 ---
 
 ## Technologies
 
-Built with plain HTML / CSS / JavaScript — no server, no framework, no account needed.
-Barcode scanning powered by [ZXing](https://github.com/zxing-js/browser).
-Metadata from [MusicBrainz](https://musicbrainz.org).
-Artwork from [Discogs](https://www.discogs.com) & [Cover Art Archive](https://coverartarchive.org).
+Plain HTML / CSS / JavaScript — no framework, no backend, no account required.
+Authentication via [Discogs OAuth](https://www.discogs.com/developers/) proxied through a Cloudflare Worker.
+Barcode detection via the native [BarcodeDetector API](https://developer.mozilla.org/en-US/docs/Web/API/BarcodeDetector).
+Metadata from [Discogs](https://www.discogs.com) · [MusicBrainz](https://musicbrainz.org) · [Cover Art Archive](https://coverartarchive.org).
