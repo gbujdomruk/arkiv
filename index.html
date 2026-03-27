@@ -618,66 +618,46 @@ async function lookupBarcode(code) {
   showScanStatus('searching', '🔍 Recherche pour ' + code + ' …');
   document.getElementById('scan-result-wrap').innerHTML = '';
 
-  // Discogs — recherche par code-barres (base de 15M+ releases)
+  const cleanCode = code.replace(/\D/g, '');
+
+  // ── Discogs via Worker OAuth ───────────────────────────
   try {
-    const DISCOGS_TOKEN = localStorage.getItem('discogs_token') || '';
-    if (!DISCOGS_TOKEN) {
-      showScanStatus('notfound', '⚙️ Aucun token Discogs configuré. Allez dans Réglages pour en ajouter un.');
+    const oauthToken  = localStorage.getItem('discogs_oauth_token')  || '';
+    const oauthSecret = localStorage.getItem('discogs_oauth_secret') || '';
+    if (!oauthToken) {
+      showScanStatus('notfound', '⚙️ Non connecté à Discogs. Allez dans Réglages → Se connecter à Discogs.');
       return;
     }
-    // q= est plus fiable que barcode= sur l'API Discogs
-    const cleanCode = code.replace(/\D/g, '');
     const res = await fetch(
-      `https://api.discogs.com/database/search?q=${cleanCode}&type=release&per_page=5&page=1`,
-      {headers: {
-        'Authorization': `Discogs token=${DISCOGS_TOKEN}`,
-        'User-Agent': 'Arkiv/1.0'
-      }}
+      `${WORKER_URL}/search?q=${cleanCode}&token=${encodeURIComponent(oauthToken)}&secret=${encodeURIComponent(oauthSecret)}`,
+      { headers: { 'Accept': 'application/json' } }
     );
     if (res.ok) {
       const data = await res.json();
       if (data.results && data.results.length) {
-        // Prend le premier résultat (le plus pertinent)
         const r = data.results[0];
-
-        const title = r.title
-          ? r.title.includes(' - ') ? r.title.split(' - ').slice(1).join(' - ') : r.title
-          : '';
-        const artist = r.title && r.title.includes(' - ')
-          ? r.title.split(' - ')[0]
-          : '';
-
-        const year = r.year ? parseInt(r.year) : null;
-
-        // Genre : Discogs fournit styles (plus précis) et genres
+        const title  = r.title?.includes(' - ') ? r.title.split(' - ').slice(1).join(' - ') : (r.title || '');
+        const artist = r.title?.includes(' - ') ? r.title.split(' - ')[0] : '';
+        const year   = r.year ? parseInt(r.year) : null;
         let genre = '';
-        const styles = r.style || [];
-        const genres = r.genre || [];
-        // Cherche d'abord dans les styles (plus précis), puis genres
-        for (const s of [...styles, ...genres]) {
+        for (const s of [...(r.style||[]), ...(r.genre||[])]) {
           const resolved = resolveGenre(s);
           if (resolved) { genre = resolved; break; }
         }
-        // Si pas résolu, prend le premier genre Discogs tel quel
-        if (!genre && genres.length) genre = genres[0];
-
-        // Pochette Discogs (haute qualité)
-        const cover = r.cover_image || r.thumb || '';
-
-        // ID Discogs pour lien direct
+        if (!genre && r.genre?.length) genre = r.genre[0];
+        const cover     = r.cover_image || r.thumb || '';
         const discogsId = r.id ? String(r.id) : '';
-
         showFoundResult({title, artist, year, genre, cover, discogs: discogsId, code, source:'Discogs'});
         return;
       }
     }
-  } catch(e) { console.warn('Discogs error', e); }
+  } catch(e) { console.warn('Discogs Worker error', e); }
 
-  // Fallback MusicBrainz si Discogs ne trouve pas
+  // ── Fallback MusicBrainz ───────────────────────────────
   try {
     const res = await fetch(
-      `https://musicbrainz.org/ws/2/release/?query=barcode:${code}&fmt=json&limit=1`,
-      {headers: {'User-Agent': 'Arkiv/1.0'}}
+      `https://musicbrainz.org/ws/2/release/?query=barcode:${cleanCode}&fmt=json&limit=1`,
+      { headers: {'User-Agent': 'Arkiv/1.0'} }
     );
     if (res.ok) {
       const data = await res.json();
@@ -685,7 +665,7 @@ async function lookupBarcode(code) {
         const releaseId = data.releases[0].id;
         const fullRes = await fetch(
           `https://musicbrainz.org/ws/2/release/${releaseId}?fmt=json&inc=artist-credits+release-groups+genres+tags`,
-          {headers: {'User-Agent': 'Arkiv/1.0'}}
+          { headers: {'User-Agent': 'Arkiv/1.0'} }
         );
         if (!fullRes.ok) throw new Error();
         const r = await fullRes.json();
@@ -707,7 +687,10 @@ async function lookupBarcode(code) {
         const rgId = r['release-group']?.id || '';
         if (rgId) {
           try {
-            const rgRes = await fetch(`https://musicbrainz.org/ws/2/release-group/${rgId}?fmt=json&inc=genres`, {headers:{'User-Agent':'Arkiv/1.0'}});
+            const rgRes = await fetch(
+              `https://musicbrainz.org/ws/2/release-group/${rgId}?fmt=json&inc=genres`,
+              { headers: {'User-Agent': 'Arkiv/1.0'} }
+            );
             if (rgRes.ok) {
               const rgData = await rgRes.json();
               for (const g of (rgData.genres||[]).sort((a,b)=>(b.count||0)-(a.count||0))) {
@@ -719,7 +702,10 @@ async function lookupBarcode(code) {
         }
         let cover = '';
         try {
-          const caRes = await fetch(`https://coverartarchive.org/release/${releaseId}/front-250`, {redirect:'follow'});
+          const caRes = await fetch(
+            `https://coverartarchive.org/release/${releaseId}/front-250`,
+            { redirect: 'follow' }
+          );
           if (caRes.ok) cover = caRes.url;
         } catch(e) {}
         showFoundResult({title, artist, year, genre, cover, discogs:'', code, source:'MusicBrainz'});
@@ -729,7 +715,7 @@ async function lookupBarcode(code) {
   } catch(e) { console.warn('MusicBrainz fallback error', e); }
 
   // Non trouvé
-  showScanStatus('notfound', '❌ Média non trouvé dans MusicBrainz.\nComplétez les informations manuellement.');
+  showScanStatus('notfound', '❌ Média non trouvé. Complétez les informations manuellement.');
   setTimeout(() => {
     prefillForm({title:'', artist:'', year:null, genre:'', cover:'', notes:`Code-barres: ${code}`});
   }, 1800);
