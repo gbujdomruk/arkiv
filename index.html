@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Ma CDthèque">
+<meta name="apple-mobile-web-app-title" content="Arkiv">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#0e0e11">
-<title>Ma CDthèque</title>
+<title>Arkiv</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap');
   :root{--bg:#0e0e11;--surface:#18181d;--surface2:#222228;--accent:#e8ff47;--accent2:#ff6b35;--text:#f0efe8;--muted:#888880;--border:rgba(240,239,232,0.1);--card-r:16px;}
@@ -146,7 +146,7 @@
 <!-- ═══ LISTE ═══ -->
 <div class="screen active" id="screen-list">
   <div class="header">
-    <div class="logo">Ma <span>CD</span>thèque</div>
+    <div class="logo"><span>Ark</span>iv</div>
     <div class="header-stats"><strong id="total-count">…</strong>albums</div>
   </div>
   <div class="search-wrap">
@@ -162,6 +162,7 @@
     <button class="sort-btn" onclick="setSort('artist')" id="sort-artist">Artiste</button>
     <button class="sort-btn" onclick="setSort('year')" id="sort-year">Année</button>
     <button class="sort-btn" onclick="setSort('genre')" id="sort-genre">Genre</button>
+    <button class="sort-btn" onclick="setSort('mediaType')" id="sort-mediaType">Type</button>
     <button class="sort-btn" onclick="setSort('added')" id="sort-added">Récents</button>
   </div>
   <div class="scroll-area">
@@ -204,13 +205,13 @@
 <div class="screen" id="screen-add">
   <div class="form-header">
     <button class="back-btn" onclick="cancelForm()">←</button>
-    <div class="form-title" id="form-title-label">Nouveau CD</div>
+    <div class="form-title" id="form-title-label">Nouveau média</div>
   </div>
   <div class="scroll-area">
     <div class="form-body">
       <div class="import-zone" id="import-zone" onclick="document.getElementById('csvFileInput').click()">
         <div style="font-size:28px;margin-bottom:6px;">📂</div>
-        <div style="font-weight:700;font-size:15px;color:var(--text);">Importer MusicBuddy CSV</div>
+        <div style="font-weight:700;font-size:15px;color:var(--text);">Importer catalogue CSV</div>
         <div style="font-size:12px;color:var(--muted);margin-top:4px;">Glissez ou appuyez pour choisir</div>
       </div>
       <div id="import-progress" style="display:none;">
@@ -220,6 +221,19 @@
       <input type="file" id="csvFileInput" accept=".csv" onchange="importCSV(event)">
       <div style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;">
         <div style="flex:1;height:1px;background:var(--border);"></div><span>ou saisir manuellement</span><div style="flex:1;height:1px;background:var(--border);"></div>
+      </div>
+      <div class="form-group">
+        <div class="form-label">TYPE DE MÉDIA</div>
+        <select class="form-input" id="f-type">
+          <option value="CD">💿 CD</option>
+          <option value="Vinyle">🎵 Vinyle</option>
+          <option value="MP3">🎧 MP3 / Numérique</option>
+          <option value="DVD">📀 DVD</option>
+          <option value="Blu-ray">📀 Blu-ray</option>
+          <option value="Livre">📚 Livre</option>
+          <option value="BD">🎨 BD / Manga</option>
+          <option value="Autre">📦 Autre</option>
+        </select>
       </div>
       <div class="form-group"><div class="form-label">TITRE *</div><input class="form-input" id="f-title" placeholder="Ex: Nevermind"></div>
       <div class="form-group"><div class="form-label">ARTISTE *</div><input class="form-input" id="f-artist" placeholder="Ex: Nirvana"></div>
@@ -281,7 +295,7 @@
   <div class="header"><div class="logo">Statistiques</div><div style="font-size:12px;color:var(--muted);font-family:'Space Mono',monospace;">collection</div></div>
   <div class="scroll-area">
     <div class="stats-body" id="stats-content">
-      <div class="empty-state"><div class="big">📊</div><p>Importez votre CSV<br>pour voir les statistiques.</p></div>
+      <div class="empty-state"><div class="big">📊</div><p>Importez votre catalogue CSV<br>pour voir les statistiques.</p></div>
     </div>
   </div>
 </div>
@@ -296,25 +310,15 @@
     <div class="form-body">
 
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;">
-        <div style="font-size:13px;font-weight:700;margin-bottom:6px;">🔑 Token Discogs</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px;">🔑 Connexion Discogs</div>
         <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:12px;">
-          Votre token personnel permet de rechercher les CDs via Discogs (15M+ albums).<br>
-          Il est sauvegardé <strong style="color:var(--text)">uniquement sur votre appareil</strong>, jamais dans le code.
+          Connectez votre compte Discogs pour identifier les médias par code-barres (15M+ références).<br>
+          Votre identité est stockée <strong style="color:var(--text)">uniquement sur votre appareil</strong>.
         </div>
         <div id="token-status" style="font-family:'Space Mono',monospace;font-size:11px;padding:8px 12px;border-radius:8px;margin-bottom:12px;"></div>
-        <div class="form-group">
-          <div class="form-label">TOKEN DISCOGS</div>
-          <input class="form-input" id="discogs-token-input" type="password" placeholder="Collez votre token ici…" autocomplete="off" autocorrect="off" spellcheck="false">
-        </div>
-        <div style="font-size:11px;color:var(--muted);margin:8px 0 12px;line-height:1.5;">
-          Pour obtenir un token gratuit :<br>
-          1. Créez un compte sur <strong style="color:var(--text)">discogs.com</strong><br>
-          2. Allez dans Paramètres → Développeurs<br>
-          3. Cliquez "Générer un token"
-        </div>
         <div style="display:flex;gap:10px;">
-          <button class="btn-action primary" onclick="saveDiscogsToken()" style="flex:2;">💾 Enregistrer</button>
-          <button class="btn-action danger" onclick="clearDiscogsToken()" style="flex:1;">Effacer</button>
+          <button class="btn-action primary" onclick="connectDiscogs()" id="btn-connect" style="flex:2;">🔗 Se connecter à Discogs</button>
+          <button class="btn-action danger" onclick="disconnectDiscogs()" id="btn-disconnect" style="flex:1;display:none;">Déconnecter</button>
         </div>
       </div>
 
@@ -327,7 +331,7 @@
       </div>
 
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:16px;font-size:12px;color:var(--muted);line-height:1.7;">
-        <strong style="color:var(--text);">Ma CDthèque</strong> — Application personnelle.<br>
+        <strong style="color:var(--text);">Arkiv</strong> — Application personnelle.<br>
         Données stockées localement sur votre appareil.<br>
         Métadonnées : Discogs · MusicBrainz · Cover Art Archive.
       </div>
@@ -339,7 +343,7 @@
 
 <!-- BOTTOM NAV -->
 <div class="bottom-nav">
-  <button class="nav-btn active" id="nav-list" onclick="showScreen('screen-list')"><span class="nav-icon">💿</span>Ma liste</button>
+  <button class="nav-btn active" id="nav-list" onclick="showScreen('screen-list')"><span class="nav-icon">🗄</span>Ma liste</button>
   <button class="nav-btn" id="nav-scan" onclick="showScreen('screen-scan')"><span class="nav-icon">📷</span>Scanner</button>
   <button class="nav-btn" id="nav-add" onclick="showScreen('screen-add')"><span class="nav-icon">➕</span>Ajouter</button>
   <button class="nav-btn" id="nav-stats" onclick="showScreen('screen-stats')"><span class="nav-icon">📊</span>Stats</button>
@@ -348,7 +352,7 @@
 
 <script>
 // ═══ ÉTAT ════════════════════════════════════════════════
-const STORAGE_KEY = 'cdtheque-v1';
+const STORAGE_KEY = 'arkiv-v1';
 let cds = [], filtered = [], allGenres = [];
 let currentSort = 'title', currentGenre = '', favsOnly = false;
 let editingId = null, currentDetailId = null, nextId = 1;
@@ -378,7 +382,7 @@ function loadLibrary() {
       nextId = d.nextId || cds.length + 1;
       allGenres = d.genres || [];
       renderGenreChips();
-      showNotif(`📚 ${cds.length} albums chargés`);
+      showNotif(`📚 ${cds.length} médias chargés`);
     }
   } catch(e) {}
   renderList();
@@ -386,7 +390,20 @@ function loadLibrary() {
 
 // ═══ HELPERS ═════════════════════════════════════════════
 function fmtDur(s){if(!s)return'';return Math.floor(s/60)+':'+(s%60<10?'0':'')+s%60;}
-function getEmoji(g){g=(g||'').toLowerCase();if(g.includes('rock'))return'🎸';if(g.includes('jazz'))return'🎷';if(g.includes('pop'))return'🎤';if(g.includes('class'))return'🎻';if(g.includes('electro')||g.includes('electronic'))return'🎧';if(g.includes('metal')||g.includes('métal'))return'🤘';if(g.includes('hip')||g.includes('rap'))return'🎵';if(g.includes('folk'))return'🪕';if(g.includes('blues'))return'🎺';if(g.includes('reggae'))return'🌿';if(g.includes('soul')||g.includes('r&b'))return'🎵';return'💿';}
+function getEmoji(genre, mediaType) {
+  const m = (mediaType||'').toLowerCase();
+  if(m==='vinyle') return '🎵';
+  if(m==='dvd'||m==='blu-ray') return '📀';
+  if(m==='livre') return '📚';
+  if(m==='bd') return '🎨';
+  if(m==='mp3') return '🎧';
+  const g=(genre||'').toLowerCase();
+  if(g.includes('rock'))return'🎸';if(g.includes('jazz'))return'🎷';if(g.includes('pop'))return'🎤';
+  if(g.includes('class'))return'🎻';if(g.includes('electro')||g.includes('electronic'))return'🎧';
+  if(g.includes('metal')||g.includes('métal'))return'🤘';if(g.includes('hip')||g.includes('rap'))return'🎵';
+  if(g.includes('folk'))return'🪕';if(g.includes('blues'))return'🎺';if(g.includes('reggae'))return'🌿';
+  if(g.includes('soul')||g.includes('r&b'))return'🎵';return'💿';
+}
 function parseTracks(raw){if(!raw)return[];try{return JSON.parse(raw).map(t=>({name:t.title.replace(/^\d+[-.\s]+/).replace(/^\d+-\d+\.\s+/,''),dur:t.duration||0}));}catch(e){return[];}}
 function parseGenre(raw){if(!raw)return'';try{const a=JSON.parse(raw);return Array.isArray(a)?a[0]||'':raw;}catch(e){return raw.split(',')[0].trim();}}
 function parseCSVLine(line){const r=[];let cur='',inQ=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){if(inQ&&line[i+1]==='"'){cur+='"';i++;}else inQ=!inQ;}else if(c===','&&!inQ){r.push(cur);cur='';}else cur+=c;}r.push(cur);return r;}
@@ -440,11 +457,11 @@ function importCSV(event) {
         saveLibrary();
         setTimeout(() => {
           document.getElementById('progress-fill').style.width = '100%';
-          document.getElementById('load-status').textContent = `${imported.length} albums importés !`;
+          document.getElementById('load-status').textContent = `${imported.length} médias importés !`;
           event.target.value = '';
           setTimeout(() => {
             document.getElementById('import-progress').style.display = 'none';
-            showNotif(`✅ ${imported.length} albums importés !`);
+            showNotif(`✅ ${imported.length} médias importés !`);
             showScreen('screen-list');
           }, 600);
         }, 800);
@@ -614,7 +631,7 @@ async function lookupBarcode(code) {
       `https://api.discogs.com/database/search?q=${cleanCode}&type=release&per_page=5&page=1`,
       {headers: {
         'Authorization': `Discogs token=${DISCOGS_TOKEN}`,
-        'User-Agent': 'CDtheque/1.0'
+        'User-Agent': 'Arkiv/1.0'
       }}
     );
     if (res.ok) {
@@ -660,7 +677,7 @@ async function lookupBarcode(code) {
   try {
     const res = await fetch(
       `https://musicbrainz.org/ws/2/release/?query=barcode:${code}&fmt=json&limit=1`,
-      {headers: {'User-Agent': 'CDtheque/1.0'}}
+      {headers: {'User-Agent': 'Arkiv/1.0'}}
     );
     if (res.ok) {
       const data = await res.json();
@@ -668,7 +685,7 @@ async function lookupBarcode(code) {
         const releaseId = data.releases[0].id;
         const fullRes = await fetch(
           `https://musicbrainz.org/ws/2/release/${releaseId}?fmt=json&inc=artist-credits+release-groups+genres+tags`,
-          {headers: {'User-Agent': 'CDtheque/1.0'}}
+          {headers: {'User-Agent': 'Arkiv/1.0'}}
         );
         if (!fullRes.ok) throw new Error();
         const r = await fullRes.json();
@@ -690,7 +707,7 @@ async function lookupBarcode(code) {
         const rgId = r['release-group']?.id || '';
         if (rgId) {
           try {
-            const rgRes = await fetch(`https://musicbrainz.org/ws/2/release-group/${rgId}?fmt=json&inc=genres`, {headers:{'User-Agent':'CDtheque/1.0'}});
+            const rgRes = await fetch(`https://musicbrainz.org/ws/2/release-group/${rgId}?fmt=json&inc=genres`, {headers:{'User-Agent':'Arkiv/1.0'}});
             if (rgRes.ok) {
               const rgData = await rgRes.json();
               for (const g of (rgData.genres||[]).sort((a,b)=>(b.count||0)-(a.count||0))) {
@@ -712,14 +729,14 @@ async function lookupBarcode(code) {
   } catch(e) { console.warn('MusicBrainz fallback error', e); }
 
   // Non trouvé
-  showScanStatus('notfound', '❌ CD non trouvé dans MusicBrainz.\nComplétez les informations manuellement.');
+  showScanStatus('notfound', '❌ Média non trouvé dans MusicBrainz.\nComplétez les informations manuellement.');
   setTimeout(() => {
     prefillForm({title:'', artist:'', year:null, genre:'', cover:'', notes:`Code-barres: ${code}`});
   }, 1800);
 }
 
 function showFoundResult(cd) {
-  showScanStatus('found', '✅ CD identifié !');
+  showScanStatus('found', '✅ Média identifié !');
   const cdJson = JSON.stringify(cd).replace(/"/g,'&quot;');
   document.getElementById('scan-result-wrap').innerHTML = `
     <div class="scan-result-card">
@@ -741,9 +758,9 @@ function showFoundResult(cd) {
 function confirmAddCD(cd) {
   const exists = cds.some(c => c.title.toLowerCase()===cd.title.toLowerCase() && c.artist.toLowerCase()===cd.artist.toLowerCase());
   if (exists && !confirm(`"${cd.title}" est peut-être déjà dans votre collection. Ajouter quand même ?`)) return;
-  cds.unshift({id:nextId++, title:cd.title, artist:cd.artist, year:cd.year||null, genre:cd.genre||'', cover:cd.cover||'', notes:cd.notes||'', discogs:cd.discogs||'', tracks:[], fav:false, rating:0, added:nextId});
+  cds.unshift({id:nextId++, title:cd.title, artist:cd.artist, year:cd.year||null, genre:cd.genre||'', mediaType:cd.mediaType||'CD', cover:cd.cover||'', notes:cd.notes||'', discogs:cd.discogs||'', tracks:[], fav:false, rating:0, added:nextId});
   saveLibrary();
-  showNotif('✅ CD ajouté !');
+  showNotif('✅ Média ajouté !');
   document.getElementById('scan-result-wrap').innerHTML = '';
   document.getElementById('scan-status').className = 'scan-status';
   document.getElementById('manual-barcode').value = '';
@@ -753,13 +770,14 @@ function confirmAddCD(cd) {
 function prefillForm(cd) {
   stopCamera();
   editingId = null;
-  document.getElementById('form-title-label').textContent = 'Nouveau CD';
+  document.getElementById('form-title-label').textContent = 'Nouveau média';
   document.getElementById('f-title').value = cd.title || '';
   document.getElementById('f-artist').value = cd.artist || '';
   document.getElementById('f-year').value = cd.year || '';
   document.getElementById('f-genre').value = cd.genre || '';
   document.getElementById('f-notes').value = cd.notes || '';
   document.getElementById('f-cover').value = cd.cover || '';
+  if(document.getElementById('f-type')) document.getElementById('f-type').value = cd.mediaType||'CD';
   document.getElementById('f-tracks').value = '';
   showScreen('screen-add');
 }
@@ -787,6 +805,7 @@ function applyFilter() {
     if(currentSort==='artist') return a.artist.localeCompare(b.artist,'fr');
     if(currentSort==='year') return (b.year||0)-(a.year||0);
     if(currentSort==='genre') return (a.genre||'').localeCompare(b.genre||'','fr');
+    if(currentSort==='mediaType') return (a.mediaType||'').localeCompare(b.mediaType||'','fr');
     if(currentSort==='added') return b.added-a.added;
     return 0;
   });
@@ -798,19 +817,20 @@ function renderList() {
   document.getElementById('total-count').textContent = cds.length;
   const list = document.getElementById('cd-list');
   if (!filtered.length) {
-    list.innerHTML = `<div class="empty-state"><div class="big">${cds.length?'🔍':'📂'}</div><p>${cds.length?'Aucun résultat.':'Importez votre CSV<br>ou scannez un code-barres.'}</p></div>`;
+    list.innerHTML = `<div class="empty-state"><div class="big">${cds.length?'🔍':'📂'}</div><p>${cds.length?'Aucun résultat.':'Importez votre catalogue CSV<br>ou scannez un code-barres.'}</p></div>`;
     document.getElementById('pager').style.display = 'none'; return;
   }
   const totalPages = Math.ceil(filtered.length/PAGE_SIZE);
   list.innerHTML = filtered.slice(page*PAGE_SIZE,(page+1)*PAGE_SIZE).map(cd => `
     <div class="cd-card" onclick="showDetail(${cd.id})">
       <div class="cd-cover">${cd.cover
-        ? `<img src="${cd.cover}" alt="" onerror="this.parentElement.innerHTML='<div style=font-size:24px>${getEmoji(cd.genre)}</div>'">`
-        : `<div style="font-size:24px">${getEmoji(cd.genre)}</div>`}</div>
+        ? `<img src="${cd.cover}" alt="" onerror="this.parentElement.innerHTML='<div style=font-size:24px>${getEmoji(cd.genre, cd.mediaType)}</div>'">`
+        : `<div style="font-size:24px">${getEmoji(cd.genre, cd.mediaType)}</div>`}</div>
       <div class="cd-info">
         <div class="cd-title">${cd.title||'Sans titre'}</div>
         <div class="cd-artist">${cd.artist||'Artiste inconnu'}</div>
         <div class="cd-meta">
+          ${cd.mediaType?`<span class="cd-tag" style="color:var(--accent2);border-color:rgba(255,107,53,0.3);background:rgba(255,107,53,0.08)">${cd.mediaType}</span>`:''}
           ${cd.genre?`<span class="cd-tag genre">${cd.genre}</span>`:''}
           ${cd.year?`<span class="cd-tag year">${cd.year}</span>`:''}
           ${cd.tracks?.length?`<span class="cd-tag">${cd.tracks.length} pistes</span>`:''}
@@ -838,9 +858,10 @@ function showDetail(id) {
   document.getElementById('detail-fav-btn').textContent = cd.fav?'⭐':'☆';
   const cw = document.getElementById('detail-cover-wrap');
   cw.innerHTML = cd.cover
-    ? `<img class="detail-cover-img" src="${cd.cover}" alt="" onerror="this.outerHTML='<div class=detail-cover-placeholder>${getEmoji(cd.genre)}</div>'">`
-    : `<div class="detail-cover-placeholder">${getEmoji(cd.genre)}</div>`;
+    ? `<img class="detail-cover-img" src="${cd.cover}" alt="" onerror="this.outerHTML='<div class=detail-cover-placeholder>${getEmoji(cd.genre, cd.mediaType)}</div>'">`
+    : `<div class="detail-cover-placeholder">${getEmoji(cd.genre, cd.mediaType)}</div>`;
   let tags = '';
+  if(cd.mediaType) tags += `<span class="detail-tag" style="color:var(--accent2);border-color:rgba(255,107,53,0.3)">${cd.mediaType}</span>`;
   if(cd.genre) tags += `<span class="detail-tag accent">${cd.genre}</span>`;
   if(cd.year) tags += `<span class="detail-tag">${cd.year}</span>`;
   if(cd.notes) tags += `<span class="detail-tag">${cd.notes}</span>`;
@@ -871,6 +892,7 @@ function editCD() {
   document.getElementById('f-genre').value = cd.genre||'';
   document.getElementById('f-notes').value = cd.notes||'';
   document.getElementById('f-cover').value = cd.cover||'';
+  if(document.getElementById('f-type')) document.getElementById('f-type').value = cd.mediaType||'CD';
   document.getElementById('f-tracks').value = (cd.tracks||[]).map((t,i)=>`${i+1}. ${t.name}`).join('\n');
   showScreen('screen-add');
 }
@@ -888,16 +910,16 @@ function saveCD() {
     if(cd) { cd.title=title; cd.artist=document.getElementById('f-artist').value.trim(); cd.year=parseInt(document.getElementById('f-year').value)||null; cd.genre=document.getElementById('f-genre').value.trim(); cd.notes=document.getElementById('f-notes').value.trim(); cd.cover=document.getElementById('f-cover').value.trim(); cd.tracks=tracks; }
     editingId = null;
   } else {
-    cds.unshift({id:nextId++,title,artist:document.getElementById('f-artist').value.trim(),year:parseInt(document.getElementById('f-year').value)||null,genre:document.getElementById('f-genre').value.trim(),notes:document.getElementById('f-notes').value.trim(),cover:document.getElementById('f-cover').value.trim(),tracks,fav:false,rating:0,discogs:'',added:nextId});
+    cds.unshift({id:nextId++,title,artist:document.getElementById('f-artist').value.trim(),year:parseInt(document.getElementById('f-year').value)||null,genre:document.getElementById('f-genre').value.trim(),mediaType:document.getElementById('f-type').value,notes:document.getElementById('f-notes').value.trim(),cover:document.getElementById('f-cover').value.trim(),tracks,fav:false,rating:0,discogs:'',added:nextId});
   }
-  clearForm(); document.getElementById('form-title-label').textContent='Nouveau CD';
-  saveLibrary(); showNotif('💾 CD enregistré !'); showScreen('screen-list');
+  clearForm(); document.getElementById('form-title-label').textContent='Nouveau média';
+  saveLibrary(); showNotif('💾 Média enregistré !'); showScreen('screen-list');
 }
 
 function deleteCurrentCD() {
-  if(!confirm('Supprimer ce CD de la collection ?')) return;
+  if(!confirm('Supprimer ce média de la collection ?')) return;
   cds = cds.filter(c=>c.id!==currentDetailId);
-  saveLibrary(); showNotif('🗑 CD supprimé'); showScreen('screen-list');
+  saveLibrary(); showNotif('🗑 Média supprimé'); showScreen('screen-list');
 }
 
 function onSearch() { renderList(); }
@@ -920,7 +942,7 @@ function showScreen(id) {
 
 // ═══ STATS ════════════════════════════════════════════════
 function renderStats() {
-  if(!cds.length){document.getElementById('stats-content').innerHTML='<div class="empty-state"><div class="big">📊</div><p>Importez votre CSV pour voir les statistiques.</p></div>';return;}
+  if(!cds.length){document.getElementById('stats-content').innerHTML='<div class="empty-state"><div class="big">📊</div><p>Importez votre catalogue CSV pour voir les statistiques.</p></div>';return;}
   const favs=cds.filter(c=>c.fav).length;
   const totalTracks=cds.reduce((s,c)=>s+(c.tracks?.length||0),0);
   const withR=cds.filter(c=>c.rating>0);
@@ -933,7 +955,7 @@ function renderStats() {
   const aMap={};cds.forEach(c=>{if(c.artist)aMap[c.artist]=(aMap[c.artist]||0)+1;});
   const topA=Object.entries(aMap).sort((a,b)=>b[1]-a[1])[0];
   document.getElementById('stats-content').innerHTML=`
-    <div class="stats-hero"><div class="stats-number">${cds.length}</div><div class="stats-label">albums dans la collection</div></div>
+    <div class="stats-hero"><div class="stats-number">${cds.length}</div><div class="stats-label">médias dans la collection</div></div>
     <div class="stats-grid">
       <div class="stat-card"><div class="stat-val" style="color:var(--accent)">⭐ ${favs}</div><div class="stat-key">favoris</div></div>
       <div class="stat-card"><div class="stat-val">${totalTracks.toLocaleString('fr')}</div><div class="stat-key">pistes totales</div></div>
@@ -959,38 +981,62 @@ async function clearLibrary() {
 function exportCSV() {
   const rows = cds.map(cd => ['titre','artiste','annee','genre','notes','pochette','discogs_id'].map((_,i)=>`"${String([cd.title,cd.artist,cd.year||'',cd.genre||'',cd.notes||'',cd.cover||'',cd.discogs||''][i]).replace(/"/g,'""')}"`).join(','));
   const blob = new Blob([['titre,artiste,annee,genre,notes,pochette,discogs_id',...rows].join('\n')],{type:'text/csv;charset=utf-8;'});
-  const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='cdtheque.csv'; a.click();
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='arkiv.csv'; a.click();
   showNotif('⬇ Export prêt !');
 }
 
-// ═══ TOKEN DISCOGS ═══════════════════════════════════════
-function saveDiscogsToken() {
-  const token = document.getElementById('discogs-token-input').value.trim();
-  if (!token) { showNotif('⚠️ Token vide'); return; }
-  localStorage.setItem('discogs_token', token);
-  document.getElementById('discogs-token-input').value = '';
-  renderTokenStatus();
-  showNotif('🔑 Token enregistré !');
+// ═══ OAUTH DISCOGS ═══════════════════════════════════════
+const WORKER_URL = 'https://arkiv-auth.aurelien-leroux.workers.dev';
+
+function connectDiscogs() {
+  // Sauvegarde l'écran actuel, puis redirige vers le Worker qui lance OAuth
+  window.location.href = WORKER_URL + '/request_token';
 }
 
-function clearDiscogsToken() {
-  if (!confirm('Effacer le token Discogs ?')) return;
-  localStorage.removeItem('discogs_token');
+function disconnectDiscogs() {
+  if (!confirm('Se déconnecter de Discogs ?')) return;
+  localStorage.removeItem('discogs_oauth_token');
+  localStorage.removeItem('discogs_oauth_secret');
+  localStorage.removeItem('discogs_username');
   renderTokenStatus();
-  showNotif('🔑 Token effacé');
+  showNotif('🔑 Déconnecté de Discogs');
 }
 
 function renderTokenStatus() {
-  const token = localStorage.getItem('discogs_token') || '';
+  const token = localStorage.getItem('discogs_oauth_token') || '';
+  const username = localStorage.getItem('discogs_username') || '';
   const el = document.getElementById('token-status');
+  const btnConnect = document.getElementById('btn-connect');
+  const btnDisconnect = document.getElementById('btn-disconnect');
   if (!el) return;
   if (token) {
-    const masked = token.substring(0, 4) + '••••••••••••••••••••' + token.substring(token.length - 4);
     el.style.cssText = 'background:rgba(76,255,143,0.08);border:1px solid rgba(76,255,143,0.2);color:#4cff8f;font-family:Space Mono,monospace;font-size:11px;padding:8px 12px;border-radius:8px;margin-bottom:12px;';
-    el.textContent = '✅ Token configuré : ' + masked;
+    el.textContent = '✅ Connecté' + (username ? ' en tant que ' + username : '');
+    if (btnConnect) btnConnect.style.display = 'none';
+    if (btnDisconnect) btnDisconnect.style.display = 'flex';
   } else {
     el.style.cssText = 'background:rgba(255,107,53,0.08);border:1px solid rgba(255,107,53,0.2);color:var(--accent2);font-family:Space Mono,monospace;font-size:11px;padding:8px 12px;border-radius:8px;margin-bottom:12px;';
-    el.textContent = '⚠️ Aucun token — recherche Discogs désactivée';
+    el.textContent = '⚠️ Non connecté — recherche Discogs désactivée';
+    if (btnConnect) btnConnect.style.display = 'flex';
+    if (btnDisconnect) btnDisconnect.style.display = 'none';
+  }
+}
+
+// Récupère le token OAuth depuis le fragment URL après callback Discogs
+function handleOAuthCallback() {
+  const hash = window.location.hash;
+  if (!hash) return;
+  const params = new URLSearchParams(hash.substring(1));
+  const token = params.get('access_token');
+  const secret = params.get('token_secret');
+  if (token && secret) {
+    localStorage.setItem('discogs_oauth_token', token);
+    localStorage.setItem('discogs_oauth_secret', secret);
+    // Nettoie le fragment de l'URL sans recharger
+    history.replaceState(null, '', window.location.pathname);
+    showNotif('✅ Connecté à Discogs !');
+    renderTokenStatus();
+    showScreen('screen-settings');
   }
 }
 
@@ -1003,14 +1049,9 @@ iz.addEventListener('dragleave',()=>iz.classList.remove('dragover'));
 iz.addEventListener('drop',e=>{e.preventDefault();iz.classList.remove('dragover');const f=e.dataTransfer.files[0];if(f){const dt=new DataTransfer();dt.items.add(f);document.getElementById('csvFileInput').files=dt.files;importCSV({target:{files:[f],value:''}});}});
 
 // ═══ INIT ═════════════════════════════════════════════════
+handleOAuthCallback();
 loadLibrary();
 
-// ═══ SERVICE WORKER (PWA offline) ════════════════════════
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  });
-}
 </script>
 </body>
 </html>
