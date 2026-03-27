@@ -150,7 +150,7 @@
     <div class="header-stats"><strong id="total-count">…</strong>albums</div>
   </div>
   <div class="search-wrap">
-    <input class="search-input" id="search-input" placeholder="Rechercher artiste, titre…" oninput="onSearch()">
+    <input class="search-input" id="search-input" placeholder="Rechercher artiste, titre…" oninput="onSearch()" onkeydown="onSearchSubmit(event)">
     <button class="btn-icon" id="filter-toggle" onclick="toggleFilter()">⚙</button>
   </div>
   <div class="filter-bar" id="filter-bar">
@@ -913,12 +913,17 @@ function renderGenreChips() {
 const MUSIC_TYPES = ['CD','Vinyle','MP3'];
 const VIDEO_TYPES = ['DVD','Blu-ray','Série'];
 function setMediaType(mtype) {
+  // Bascule : si déjà actif, on désactive
+  if (currentMediaType === mtype) mtype = '';
   currentMediaType = mtype;
-  currentGenre = ''; favsOnly = false;
-  document.querySelectorAll('.filter-chip').forEach(c=>c.classList.remove('active'));
-  if(mtype==='music') document.getElementById('mtype-music')?.classList.add('active');
-  else if(mtype==='video') document.getElementById('mtype-video')?.classList.add('active');
-  else document.querySelector('[data-genre=""]')?.classList.add('active');
+  favsOnly = false;
+  // Met à jour les boutons type uniquement
+  document.getElementById('mtype-music')?.classList.toggle('active', mtype === 'music');
+  document.getElementById('mtype-video')?.classList.toggle('active', mtype === 'video');
+  // Si pas de type sélectionné et pas de genre, active "Tous"
+  if (!mtype && !currentGenre) {
+    document.querySelectorAll('.filter-chip[data-genre]').forEach(c => c.classList.toggle('active', c.dataset.genre === ''));
+  }
   renderList();
 }
 
@@ -926,11 +931,12 @@ function applyFilter() {
   const q = document.getElementById('search-input').value.toLowerCase().trim();
   filtered = cds.filter(cd => {
     const m = !q || cd.title.toLowerCase().includes(q) || cd.artist.toLowerCase().includes(q) || (cd.genre||'').toLowerCase().includes(q);
-    const genreMatch = !currentGenre || cd.genre===currentGenre;
+    const genreMatch = !currentGenre || (cd.genre||'').split(',').map(g=>g.trim()).includes(currentGenre) || (cd.genre||'').includes(currentGenre);
     const favMatch = !favsOnly || cd.fav;
+    const mt = cd.mediaType || 'CD';
     const typeMatch = !currentMediaType ||
-      (currentMediaType==='music' && MUSIC_TYPES.includes(cd.mediaType)) ||
-      (currentMediaType==='video' && VIDEO_TYPES.includes(cd.mediaType));
+      (currentMediaType==='music' && MUSIC_TYPES.includes(mt)) ||
+      (currentMediaType==='video' && VIDEO_TYPES.includes(mt));
     return m && genreMatch && favMatch && typeMatch;
   });
   filtered.sort((a,b) => {
@@ -1005,7 +1011,11 @@ function showDetail(id) {
     ? `<a class="discogs-link" href="https://www.discogs.com/release/${cd.discogs}" target="_blank">🔗 Voir sur Discogs</a>` : '';
   let tracksHtml = '';
   if(cd.tracks?.length) tracksHtml = `<div class="tracks-title">PISTES</div>` +
-    cd.tracks.map((t,i) => `<div class="track-item"><span class="track-num">${i+1}</span><span class="track-name">${t.name}</span>${t.dur?`<span class="track-dur">${fmtDur(t.dur)}</span>`:''}</div>`).join('');
+    cd.tracks.map((t,i) => {
+      const name = typeof t === 'string' ? t : (t.name || t.title || '');
+      const dur  = typeof t === 'object' ? (t.dur || t.duration || 0) : 0;
+      return `<div class="track-item"><span class="track-num">${i+1}</span><span class="track-name">${name}</span>${dur?`<span class="track-dur">${fmtDur(dur)}</span>`:''}</div>`;
+    }).join('');
   // Durée + résumé + lien IMDB
   let extraHtml = '';
   if(cd.runtime) extraHtml += `<div style="font-size:13px;color:var(--muted);margin-top:8px;">⏱ ${cd.runtime} min</div>`;
@@ -1069,10 +1079,33 @@ function deleteCurrentCD() {
 }
 
 function onSearch() { renderList(); }
+function onSearchSubmit(e) {
+  if (e && e.key === 'Enter') {
+    document.getElementById('search-input').blur();
+    renderList();
+  }
+}
 function setSort(s) { currentSort=s; document.querySelectorAll('.sort-btn').forEach(b=>b.classList.remove('active')); document.getElementById('sort-'+s)?.classList.add('active'); renderList(); }
 function toggleFilter() { document.getElementById('filter-bar').classList.toggle('open'); document.getElementById('filter-toggle').classList.toggle('active'); }
-function setGenre(g) { favsOnly=false; currentGenre=g; document.querySelectorAll('.filter-chip').forEach(c=>c.classList.toggle('active',c.dataset.genre===g&&c.id!=='favs-chip')); renderList(); }
-function setFavsOnly() { favsOnly=!favsOnly; currentGenre=''; document.querySelectorAll('.filter-chip').forEach(c=>c.classList.remove('active')); if(favsOnly) document.getElementById('favs-chip').classList.add('active'); else document.querySelector('[data-genre=""]').classList.add('active'); renderList(); }
+function setGenre(g) {
+  favsOnly = false;
+  currentGenre = g;
+  // Met à jour visuellement les chips de genre uniquement
+  document.querySelectorAll('.filter-chip[data-genre]').forEach(c => {
+    c.classList.toggle('active', c.dataset.genre === g);
+  });
+  // Garde le bouton type actif s'il l'était
+  if (currentMediaType === 'music') document.getElementById('mtype-music')?.classList.add('active');
+  else if (currentMediaType === 'video') document.getElementById('mtype-video')?.classList.add('active');
+  renderList();
+}
+function setFavsOnly() {
+  favsOnly = !favsOnly;
+  currentGenre = '';
+  document.querySelectorAll('.filter-chip[data-genre]').forEach(c => c.classList.toggle('active', c.dataset.genre === ''));
+  document.getElementById('favs-chip').classList.toggle('active', favsOnly);
+  renderList();
+}
 
 function showScreen(id) {
   if(id!=='screen-scan') stopCamera();
