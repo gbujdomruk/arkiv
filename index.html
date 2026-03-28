@@ -310,8 +310,8 @@
         <button class="btn-action primary" id="start-cam-btn" onclick="startCamera()" style="flex:none;padding:10px 24px;">📷 Activer la caméra</button>
         <button class="btn-action" id="stop-cam-btn" onclick="stopCamera()" style="flex:none;padding:10px 16px;display:none;">■ Arrêter</button>
       </div>
-      <div class="scan-hint">Pointez vers le code-barres du CD.<br>La détection est automatique sur <strong style="color:var(--text)">Safari iOS 17+</strong> et <strong style="color:var(--text)">Chrome Android</strong>.<br><br>
-        <span style="color:rgba(136,136,128,0.6);font-size:10px;">⚠️ Nécessite Safari sur iPhone (pas Chrome iOS).<br>Autorisez la caméra si demandé.</span>
+      <div class="scan-hint">Pointez vers le code-barres (EAN/UPC/ISBN).<br>Identifie CDs, DVDs, Blu-ray et livres.<br>Détection automatique sur <strong style="color:var(--text)">Chrome Android</strong> et <strong style="color:var(--text)">Safari iOS 17+</strong>.<br><br>
+        <span style="color:rgba(136,136,128,0.6);font-size:10px;">Autorisez la caméra si demandé.</span>
       </div>
       <div id="scan-status" class="scan-status"></div>
       <div id="scan-result-wrap"></div>
@@ -367,10 +367,60 @@
         </div>
       </div>
 
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px;">🎬 Clé API TMDB (films)</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:10px;">
+          Pour identifier les DVDs et Blu-ray par code-barres.<br>
+          Gratuit sur <strong style="color:var(--text)">themoviedb.org</strong> → Paramètres → API.
+        </div>
+        <div id="tmdb-status" style="font-family:'Space Mono',monospace;font-size:11px;padding:8px 12px;border-radius:8px;margin-bottom:10px;"></div>
+        <div class="form-group" style="margin-bottom:10px;">
+          <div class="form-label">CLÉ API TMDB</div>
+          <input class="form-input" id="tmdb-key-input" type="password" placeholder="Collez votre clé API ici…" autocomplete="off" spellcheck="false">
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-action primary" onclick="saveTmdbKey()" style="flex:2;">💾 Enregistrer</button>
+          <button class="btn-action danger" onclick="clearTmdbKey()" style="flex:1;">Effacer</button>
+        </div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px;">📖 Clé API Google Books (livres)</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:10px;">
+          Pour identifier les livres par ISBN. Gratuit sur <strong style="color:var(--text)">console.cloud.google.com</strong>.
+        </div>
+        <div id="gbooks-status" style="font-family:'Space Mono',monospace;font-size:11px;padding:8px 12px;border-radius:8px;margin-bottom:10px;"></div>
+        <div class="form-group" style="margin-bottom:10px;">
+          <div class="form-label">CLÉ API GOOGLE BOOKS</div>
+          <input class="form-input" id="gbooks-key-input" type="password" placeholder="AIza…" autocomplete="off" spellcheck="false">
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-action primary" onclick="saveGbooksKey()" style="flex:2;">💾 Enregistrer</button>
+          <button class="btn-action danger" onclick="clearGbooksKey()" style="flex:1;">Effacer</button>
+        </div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px;">🎵 URL Plex (lecture MP3)</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:10px;">
+          URL de votre serveur Plex pour ouvrir un album directement dans Plex.<br>
+          Ex : <span style="font-family:'Space Mono',monospace;font-size:10px;">http://192.168.1.x:32400</span> ou <span style="font-family:'Space Mono',monospace;font-size:10px;">https://app.plex.tv</span>
+        </div>
+        <div id="plex-status" style="font-family:'Space Mono',monospace;font-size:11px;padding:8px 12px;border-radius:8px;margin-bottom:10px;"></div>
+        <div class="form-group" style="margin-bottom:10px;">
+          <div class="form-label">URL PLEX</div>
+          <input class="form-input" id="plex-url-input" type="url" placeholder="https://app.plex.tv" autocomplete="off" spellcheck="false">
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-action primary" onclick="savePlexUrl()" style="flex:2;">💾 Enregistrer</button>
+          <button class="btn-action danger" onclick="clearPlexUrl()" style="flex:1;">Effacer</button>
+        </div>
+      </div>
+
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:16px;font-size:12px;color:var(--muted);line-height:1.7;">
         <strong style="color:var(--text);">Arkiv</strong> — Application personnelle.<br>
         Données stockées localement sur votre appareil.<br>
-        Métadonnées : Discogs · MusicBrainz · Cover Art Archive.
+        Métadonnées : Discogs · MusicBrainz · TMDB · Google Books · Open Library.
       </div>
 
       <div style="height:80px;"></div>
@@ -1163,7 +1213,75 @@ async function lookupBarcode(code) {
     }
   } catch(e) { console.warn('MusicBrainz fallback error', e); }
 
-  // Non trouvé
+  // ── TMDB (DVDs, Blu-ray, films) ──────────────────────
+  try {
+    const tmdbKey = localStorage.getItem('tmdb_api_key') || '';
+    if (tmdbKey) {
+      const tmdbRes = await fetch(
+        `https://api.themoviedb.org/3/find/${cleanCode}?api_key=${tmdbKey}&external_source=imdb_id&language=fr-FR`,
+        { headers: { 'Accept': 'application/json' } }
+      );
+      // Essaie aussi par recherche directe
+      const searchRes = await fetch(
+        `https://api.themoviedb.org/3/search/movie?api_key=${tmdbKey}&query=${cleanCode}&language=fr-FR`,
+        { headers: { 'Accept': 'application/json' } }
+      );
+      if (searchRes.ok) {
+        const data = await searchRes.json();
+        if (data.results && data.results.length) {
+          const m = data.results[0];
+          const title  = m.title || m.original_title || '';
+          const year   = m.release_date ? parseInt(m.release_date) : null;
+          const genre  = 'Film';
+          const cover  = m.poster_path ? `https://image.tmdb.org/t/p/w342${m.poster_path}` : '';
+          const extId  = String(m.id);
+          showFoundResult({title, artist:'', year, genre, cover, discogs:'', extId, mediaType:'DVD', summary: m.overview||'', code, source:'TMDB'});
+          return;
+        }
+      }
+    }
+  } catch(e) { console.warn('TMDB error', e); }
+
+  // ── Google Books + Open Library (ISBN livres) ──────
+  try {
+    const isbn = cleanCode;
+    const gbKey = localStorage.getItem('gbooks_api_key') || '';
+    const gbUrl = gbKey
+      ? `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&key=${gbKey}&langRestrict=fr`
+      : `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`;
+    const gbRes = await fetch(gbUrl);
+    if (gbRes.ok) {
+      const data = await gbRes.json();
+      if (data.totalItems > 0 && data.items?.length) {
+        const info = data.items[0].volumeInfo;
+        const title  = info.title || '';
+        const author = (info.authors || []).join(', ');
+        const year   = info.publishedDate ? parseInt(info.publishedDate) : null;
+        const genre  = (info.categories || ['Roman'])[0];
+        const cover  = info.imageLinks?.thumbnail?.replace('http:','https:') || '';
+        const extId  = data.items[0].id || '';
+        showFoundResult({title, artist: author, year, genre, cover, discogs:'', extId, mediaType:'Roman', summary: info.description||'', code, source:'Google Books'});
+        return;
+      }
+    }
+    // Fallback Open Library (sans clé)
+    const olRes = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`);
+    if (olRes.ok) {
+      const data = await olRes.json();
+      const key = Object.keys(data)[0];
+      if (key && data[key]) {
+        const b = data[key];
+        const title  = b.title || '';
+        const author = b.authors?.[0]?.name || '';
+        const year   = b.publish_date ? parseInt(b.publish_date) : null;
+        const cover  = b.cover?.medium || b.cover?.large || '';
+        showFoundResult({title, artist: author, year, genre:'Roman', cover, discogs:'', extId:'', mediaType:'Roman', summary:'', code, source:'Open Library'});
+        return;
+      }
+    }
+  } catch(e) { console.warn('Books lookup error', e); }
+
+  // Non trouvé dans aucune base
   showScanStatus('notfound', '❌ Média non trouvé. Complétez les informations manuellement.');
   setTimeout(() => {
     prefillForm({title:'', artist:'', year:null, genre:'', cover:'', notes:`Code-barres: ${code}`});
@@ -1193,7 +1311,7 @@ function showFoundResult(cd) {
 function confirmAddCD(cd) {
   const exists = cds.some(c => c.title.toLowerCase()===cd.title.toLowerCase() && c.artist.toLowerCase()===cd.artist.toLowerCase());
   if (exists && !confirm(`"${cd.title}" est peut-être déjà dans votre collection. Ajouter quand même ?`)) return;
-  cds.unshift({id:nextId++, title:cd.title, artist:cd.artist, year:cd.year||null, genre:cd.genre||'', mediaType:cd.mediaType||'CD', cover:cd.cover||'', notes:cd.notes||'', discogs:cd.discogs||'', tracks:[], fav:false, rating:0, added:nextId});
+  cds.unshift({id:nextId++, title:cd.title, artist:cd.artist, year:cd.year||null, genre:cd.genre||'', mediaType:cd.mediaType||'CD', cover:cd.cover||'', notes:cd.notes||'', discogs:cd.discogs||'', extId:cd.extId||'', summary:cd.summary||'', tracks:[], fav:false, rating:0, added:nextId});
   saveLibrary();
   showNotif('✅ Média ajouté !');
   document.getElementById('scan-result-wrap').innerHTML = '';
@@ -1362,8 +1480,16 @@ function showDetail(id) {
   if(cd.summary) extraHtml += `<div style="font-size:13px;color:var(--muted);margin-top:10px;line-height:1.6;">${cd.summary}</div>`;
   if(cd.extId && cd.extId.startsWith('tt')) {
     extraHtml += `<a class="discogs-link" href="https://www.imdb.com/title/${cd.extId}" target="_blank" style="margin-top:8px;">🎬 Voir sur IMDB</a>`;
-  } else if(cd.extId) {
+  } else if(cd.extId && !isNaN(cd.extId) && VIDEO_TYPES.includes(cd.mediaType||'')) {
     extraHtml += `<a class="discogs-link" href="https://www.themoviedb.org/movie/${cd.extId}" target="_blank" style="margin-top:8px;">🎬 Voir sur TMDB</a>`;
+  } else if(cd.extId && !isNaN(cd.extId) && BOOK_TYPES.includes(cd.mediaType||'')) {
+    extraHtml += `<a class="discogs-link" href="https://books.google.com/books?id=${cd.extId}" target="_blank" style="margin-top:8px;">📖 Voir sur Google Books</a>`;
+  }
+  // Lien Plex pour musique
+  const plexUrl = localStorage.getItem('plex_url') || '';
+  if(plexUrl && MUSIC_TYPES.includes(cd.mediaType||'CD')) {
+    const plexSearch = encodeURIComponent(cd.title + ' ' + (cd.artist||''));
+    extraHtml += `<a class="discogs-link" href="${plexUrl}/web/index.html#!/search?query=${plexSearch}" target="_blank" style="margin-top:8px;color:#e5a00d;border-color:rgba(229,160,13,0.4);">🎵 Écouter sur Plex</a>`;
   }
   document.getElementById('detail-tracks').innerHTML = tracksHtml + extraHtml;
   document.getElementById('detail-scroll').scrollTop = 0;
@@ -1516,23 +1642,86 @@ function disconnectDiscogs() {
 }
 
 function renderTokenStatus() {
-  const token = localStorage.getItem('discogs_oauth_token') || '';
+  const token    = localStorage.getItem('discogs_oauth_token') || '';
   const username = localStorage.getItem('discogs_username') || '';
   const el = document.getElementById('token-status');
   const btnConnect = document.getElementById('btn-connect');
   const btnDisconnect = document.getElementById('btn-disconnect');
   if (!el) return;
+  const ok = 'background:rgba(76,255,143,0.08);border:1px solid rgba(76,255,143,0.2);color:#4cff8f;font-family:Space Mono,monospace;font-size:11px;padding:8px 12px;border-radius:8px;margin-bottom:12px;';
+  const warn = 'background:rgba(255,107,53,0.08);border:1px solid rgba(255,107,53,0.2);color:var(--accent2);font-family:Space Mono,monospace;font-size:11px;padding:8px 12px;border-radius:8px;margin-bottom:12px;';
   if (token) {
-    el.style.cssText = 'background:rgba(76,255,143,0.08);border:1px solid rgba(76,255,143,0.2);color:#4cff8f;font-family:Space Mono,monospace;font-size:11px;padding:8px 12px;border-radius:8px;margin-bottom:12px;';
+    el.style.cssText = ok;
     el.textContent = '✅ Connecté' + (username ? ' en tant que ' + username : '');
     if (btnConnect) btnConnect.style.display = 'none';
     if (btnDisconnect) btnDisconnect.style.display = 'flex';
   } else {
-    el.style.cssText = 'background:rgba(255,107,53,0.08);border:1px solid rgba(255,107,53,0.2);color:var(--accent2);font-family:Space Mono,monospace;font-size:11px;padding:8px 12px;border-radius:8px;margin-bottom:12px;';
+    el.style.cssText = warn;
     el.textContent = '⚠️ Non connecté — recherche Discogs désactivée';
     if (btnConnect) btnConnect.style.display = 'flex';
     if (btnDisconnect) btnDisconnect.style.display = 'none';
   }
+  // TMDB
+  const tmdbEl = document.getElementById('tmdb-status');
+  if (tmdbEl) {
+    const tmdbKey = localStorage.getItem('tmdb_api_key') || '';
+    tmdbEl.style.cssText = tmdbKey ? ok : warn;
+    tmdbEl.textContent = tmdbKey ? '✅ Clé TMDB configurée' : '⚠️ Aucune clé — scan DVD/Blu-ray désactivé';
+    const inp = document.getElementById('tmdb-key-input');
+    if(inp) inp.value = '';
+  }
+  // Google Books
+  const gbEl = document.getElementById('gbooks-status');
+  if (gbEl) {
+    const gbKey = localStorage.getItem('gbooks_api_key') || '';
+    gbEl.style.cssText = gbKey ? ok : warn;
+    gbEl.textContent = gbKey ? '✅ Clé Google Books configurée' : '⚠️ Aucune clé — Open Library utilisé (sans limite)';
+    const inp = document.getElementById('gbooks-key-input');
+    if(inp) inp.value = '';
+  }
+  // Plex
+  const plexEl = document.getElementById('plex-status');
+  if (plexEl) {
+    const plexUrl = localStorage.getItem('plex_url') || '';
+    plexEl.style.cssText = plexUrl ? ok : warn;
+    plexEl.textContent = plexUrl ? '✅ Plex : ' + plexUrl : '⚠️ URL Plex non configurée';
+    const inp = document.getElementById('plex-url-input');
+    if(inp) inp.value = plexUrl;
+  }
+}
+
+// Gestion des clés API
+function saveTmdbKey() {
+  const k = document.getElementById('tmdb-key-input').value.trim();
+  if (!k) { showNotif('⚠️ Clé vide'); return; }
+  localStorage.setItem('tmdb_api_key', k);
+  document.getElementById('tmdb-key-input').value = '';
+  renderTokenStatus(); showNotif('🎬 Clé TMDB enregistrée !');
+}
+function clearTmdbKey() {
+  localStorage.removeItem('tmdb_api_key');
+  renderTokenStatus(); showNotif('🎬 Clé TMDB effacée');
+}
+function saveGbooksKey() {
+  const k = document.getElementById('gbooks-key-input').value.trim();
+  if (!k) { showNotif('⚠️ Clé vide'); return; }
+  localStorage.setItem('gbooks_api_key', k);
+  document.getElementById('gbooks-key-input').value = '';
+  renderTokenStatus(); showNotif('📖 Clé Google Books enregistrée !');
+}
+function clearGbooksKey() {
+  localStorage.removeItem('gbooks_api_key');
+  renderTokenStatus(); showNotif('📖 Clé Google Books effacée');
+}
+function savePlexUrl() {
+  const u = document.getElementById('plex-url-input').value.trim();
+  if (!u) { showNotif('⚠️ URL vide'); return; }
+  localStorage.setItem('plex_url', u);
+  renderTokenStatus(); showNotif('🎵 URL Plex enregistrée !');
+}
+function clearPlexUrl() {
+  localStorage.removeItem('plex_url');
+  renderTokenStatus(); showNotif('🎵 URL Plex effacée');
 }
 
 // Récupère le token OAuth depuis le fragment URL après callback Discogs
