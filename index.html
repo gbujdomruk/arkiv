@@ -239,10 +239,10 @@
         <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
         <div class="load-status" id="load-status">Chargement…</div>
       </div>
-      <input type="file" id="csvFileInput" accept=".csv" onchange="importCSV(event)">
-      <input type="file" id="csvFileInputMovie" accept=".csv" onchange="importMovieCSV(event)">
-      <input type="file" id="csvFileInputBook" accept=".csv" onchange="importBookCSV(event)">
-      <input type="file" id="csvFileInputBd" accept=".csv,.tsv" onchange="importBdCSV(event)">
+      <input type="file" id="csvFileInput" accept=".csv" onchange="importCSV(event)" style="display:none">
+      <input type="file" id="csvFileInputMovie" accept=".csv" onchange="importMovieCSV(event)" style="display:none">
+      <input type="file" id="csvFileInputBook" accept=".csv" onchange="importBookCSV(event)" style="display:none">
+      <input type="file" id="csvFileInputBd" accept=".csv,.tsv" onchange="importBdCSV(event)" style="display:none">
       <div style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;">
         <div style="flex:1;height:1px;background:var(--border);"></div><span>ou saisir manuellement</span><div style="flex:1;height:1px;background:var(--border);"></div>
       </div>
