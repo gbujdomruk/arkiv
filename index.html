@@ -682,8 +682,8 @@ function importMovieCSV(event) {
           const year = (idx.year>=0 ? parseInt(p[idx.year]) : null) || (idx.origYear>=0 ? parseInt(p[idx.origYear]) : null) || null;
           const runtime = idx.runtime>=0 ? parseInt(p[idx.runtime])||null : null;
           const summary = (idx.summary>=0 ? p[idx.summary]||'' : '').trim();
-          const cover   = (idx.cover>=0   ? p[idx.cover]||''   : '').trim();
-          const title   = (idx.title>=0   ? p[idx.title]||''   : '').trim();
+          const rawCover = (idx.cover>=0 ? p[idx.cover]||'' : '').trim();
+          const cover = rawCover || (tmdbId ? `__tmdb__${tmdbId}__${mediaType}` : '');          const title   = (idx.title>=0   ? p[idx.title]||''   : '').trim();
           imported.push({
             id: nextId++, title, artist: director, year, genre, mediaType,
             tracks: [], cover, notes: castStr ? `Avec : ${castStr}` : '',
@@ -700,6 +700,7 @@ function importMovieCSV(event) {
         document.getElementById('progress-fill').style.width = '90%';
         document.getElementById('load-status').textContent = 'Sauvegarde locale…';
         saveLibrary();
+        resolveTmdbCovers(imported);
         setTimeout(() => {
           document.getElementById('progress-fill').style.width = '100%';
           document.getElementById('load-status').textContent = `${imported.length} films/séries importés !`;
