@@ -448,31 +448,73 @@ const PAGE_SIZE = 50;
 let saveTimer = null;
 let scanStream = null, scanActive = false, scanAnimFrame = null;
 
-// ═══ STOCKAGE LOCAL ══════════════════════════════════════
+// ═══ STOCKAGE INDEXEDDB ══════════════════════════════════
+let db = null;
+const DB_NAME = 'arkiv-db', DB_VERSION = 1, STORE = 'library';
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    if (db) { resolve(db); return; }
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains(STORE)) d.createObjectStore(STORE);
+    };
+    req.onsuccess = e => { db = e.target.result; resolve(db); };
+    req.onerror   = () => reject(req.error);
+  });
+}
+
 function saveLibrary() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
+  saveTimer = setTimeout(async () => {
     try {
       const genres = [...new Set(cds.map(c=>c.genre).filter(Boolean))].sort();
       allGenres = genres;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({cds, nextId, genres}));
-    } catch(e) { showNotif('⚠️ Espace de stockage plein'); }
+      const d = await openDB();
+      const tx = d.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).put({cds, nextId, genres}, STORAGE_KEY);
+    } catch(e) { showNotif('⚠️ Erreur de sauvegarde : ' + e.message); }
   }, 1500);
 }
 
-function loadLibrary() {
+async function loadLibrary() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const d = JSON.parse(raw);
-      cds = d.cds || [];
-      nextId = d.nextId || cds.length + 1;
-      allGenres = d.genres || [];
-      renderGenreChips();
-      showNotif(`📚 ${cds.length} médias chargés`);
+    // Migre depuis localStorage si nécessaire (ancienne version)
+    const legacy = localStorage.getItem(STORAGE_KEY);
+    if (legacy) {
+      const d = JSON.parse(legacy);
+      cds = d.cds || []; nextId = d.nextId || cds.length+1; allGenres = d.genres || [];
+      await saveLibrary(); // Réécrit dans IndexedDB
+      localStorage.removeItem(STORAGE_KEY); // Supprime l'ancienne version
+      showNotif('📦 Collection migrée vers le nouveau stockage');
+      renderGenreChips(); renderList(); return;
     }
+    // Charge depuis IndexedDB
+    const d = await openDB();
+    const tx = d.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).get(STORAGE_KEY);
+    req.onsuccess = () => {
+      if (req.result) {
+        cds = req.result.cds || [];
+        nextId = req.result.nextId || cds.length + 1;
+        allGenres = req.result.genres || [];
+        renderGenreChips();
+        showNotif(`📚 ${cds.length} médias chargés`);
+      }
+      renderList();
+    };
+    req.onerror = () => renderList();
+  } catch(e) { console.error('loadLibrary error', e); renderList(); }
+}
+
+async function clearLibraryData() {
+  try {
+    const d = await openDB();
+    const tx = d.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).delete(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY);
   } catch(e) {}
-  renderList();
 }
 
 // ═══ HELPERS ═════════════════════════════════════════════
@@ -732,7 +774,7 @@ function importBookCSV(event) {
             added: i
           });
         }
-        finalizeImport(imported, [...genreSet], event, 'livres');
+        finalizeImport(imported, event, 'livres');
       } catch(err) {
         document.getElementById('load-status').textContent = "Erreur lors de l'import.";
         console.error(err);
@@ -796,7 +838,7 @@ function importBdCSV(event) {
             fav: false, rating: 0, added: i
           });
         }
-        finalizeImport(imported, [], event, 'BD/Mangas');
+        finalizeImport(imported, event, 'BD/Mangas');
       } catch(err) {
         document.getElementById('load-status').textContent = "Erreur lors de l'import.";
         console.error(err);
@@ -807,28 +849,7 @@ function importBdCSV(event) {
   reader.readAsText(file, 'UTF-16LE');
 }
 
-// Helper commun de finalisation d'import
-function finalizeImport(imported, newGenres, event, label) {
-  // Ajoute sans écraser les médias existants d'autres types
-  const importedIds = new Set(imported.map(c=>c.id));
-  cds = [...cds.filter(c => !importedIds.has(c.id)), ...imported];
-  // Recalcule les genres globaux
-  allGenres = [...new Set(cds.map(c=>c.genre).filter(Boolean))].sort();
-  renderGenreChips();
-  document.getElementById('progress-fill').style.width = '90%';
-  document.getElementById('load-status').textContent = 'Sauvegarde locale…';
-  saveLibrary();
-  setTimeout(() => {
-    document.getElementById('progress-fill').style.width = '100%';
-    document.getElementById('load-status').textContent = `${imported.length} ${label} importés !`;
-    if (event.target) event.target.value = '';
-    setTimeout(() => {
-      document.getElementById('import-progress').style.display = 'none';
-      showNotif(`✅ ${imported.length} ${label} importés !`);
-      showScreen('screen-list');
-    }, 600);
-  }, 800);
-}
+
 
 
 // ═══ IMPORT BOOKBUDDY CSV ════════════════════════════════
@@ -951,6 +972,79 @@ function importBdCSV(event) {
     }, 50);
   };
   reader.readAsText(file, 'UTF-16LE');
+}
+
+// Résout les jaquettes TMDB en arrière-plan (sans bloquer l'UI)
+async function resolveTmdbCovers(items) {
+  const tmdbKey = localStorage.getItem('tmdb_api_key') || '';
+  if (!tmdbKey) return;
+  const toResolve = items.filter(c => (c.cover||'').startsWith('__tmdb__'));
+  if (!toResolve.length) return;
+  let updated = 0;
+  for (const item of toResolve) {
+    const parts = item.cover.split('__');
+    const tmdbId = parts[2];
+    const mtype  = parts[3] || 'DVD';
+    try {
+      const endpoint = mtype === 'Série' ? 'tv' : 'movie';
+      const res = await fetch(
+        `https://api.themoviedb.org/3/${endpoint}/${tmdbId}?api_key=${tmdbKey}&language=fr-FR`,
+        { headers: { 'Accept': 'application/json' } }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const path = data.poster_path;
+        if (path) {
+          item.cover = 'https://image.tmdb.org/t/p/w342' + path;
+          // Met aussi à jour le synopsis si vide
+          if (!item.summary && data.overview) item.summary = data.overview;
+          updated++;
+        } else {
+          item.cover = '';
+        }
+      } else {
+        item.cover = '';
+      }
+      // Petite pause pour ne pas surcharger l'API
+      await new Promise(r => setTimeout(r, 120));
+    } catch(e) { item.cover = ''; }
+  }
+  if (updated > 0) {
+    saveLibrary();
+    renderList();
+    showNotif(`🎬 ${updated} jaquettes chargées !`);
+  }
+}
+
+async function resolveTmdbCovers(items) {
+  const tmdbKey = localStorage.getItem('tmdb_api_key') || '';
+  if (!tmdbKey) return;
+  const toResolve = items.filter(c => (c.cover||'').startsWith('__tmdb__'));
+  if (!toResolve.length) return;
+  let updated = 0;
+  for (const item of toResolve) {
+    const parts = item.cover.split('__');
+    const tmdbId = parts[2];
+    const mtype  = parts[3] || 'DVD';
+    try {
+      const endpoint = mtype === 'Série' ? 'tv' : 'movie';
+      const res = await fetch(
+        `https://api.themoviedb.org/3/${endpoint}/${tmdbId}?api_key=${tmdbKey}&language=fr-FR`,
+        { headers: { 'Accept': 'application/json' } }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const path = data.poster_path;
+        if (path) {
+          item.cover = 'https://image.tmdb.org/t/p/w342' + path;
+          if (!item.summary && data.overview) item.summary = data.overview;
+          updated++;
+        } else { item.cover = ''; }
+      } else { item.cover = ''; }
+      await new Promise(r => setTimeout(r, 120));
+    } catch(e) { item.cover = ''; }
+  }
+  if (updated > 0) { saveLibrary(); renderList(); showNotif(`🎬 ${updated} jaquettes chargées !`); }
 }
 
 function finalizeImport(imported, event, label) {
@@ -1420,7 +1514,7 @@ function renderList() {
   const totalPages = Math.ceil(filtered.length/PAGE_SIZE);
   list.innerHTML = filtered.slice(page*PAGE_SIZE,(page+1)*PAGE_SIZE).map(cd => `
     <div class="cd-card" onclick="showDetail(${cd.id})">
-      <div class="cd-cover">${cd.cover
+      <div class="cd-cover">${cd.cover && !cd.cover.startsWith('__tmdb__')
         ? `<img src="${cd.cover}" alt="" onerror="this.parentElement.innerHTML='<div style=font-size:24px>${getEmoji(cd.genre, cd.mediaType)}</div>'">`
         : `<div style="font-size:24px">${getEmoji(cd.genre, cd.mediaType)}</div>`}</div>
       <div class="cd-info">
@@ -1455,7 +1549,8 @@ function showDetail(id) {
   document.getElementById('detail-artist').textContent = cd.artist;
   document.getElementById('detail-fav-btn').textContent = cd.fav?'⭐':'☆';
   const cw = document.getElementById('detail-cover-wrap');
-  cw.innerHTML = cd.cover
+  const validCover = cd.cover && !cd.cover.startsWith('__tmdb__');
+  cw.innerHTML = validCover
     ? `<img class="detail-cover-img" src="${cd.cover}" alt="" onerror="this.outerHTML='<div class=detail-cover-placeholder>${getEmoji(cd.genre, cd.mediaType)}</div>'">`
     : `<div class="detail-cover-placeholder">${getEmoji(cd.genre, cd.mediaType)}</div>`;
   let tags = '';
@@ -1612,9 +1707,9 @@ function renderStats() {
 
 async function clearLibrary() {
   if(!confirm('Effacer toute la collection sauvegardée ?')) return;
-  localStorage.removeItem(STORAGE_KEY);
+  await clearLibraryData();
   cds=[]; nextId=1; allGenres=[];
-  renderGenreChips(); showNotif('🗑 Collection effacée'); showScreen('screen-list');
+  renderGenreChips(); renderList(); showNotif('🗑 Collection effacée'); showScreen('screen-list');
 }
 
 function exportCSV() {
