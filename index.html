@@ -996,25 +996,21 @@ function importBdCSV(event) {
 }
 
 // Résout les couvertures BD/Manga via Open Library (sans requête réseau préalable)
-// On affecte directement l'URL — le navigateur gère les absences via onerror dans le template
+// Les items sont des références directes aux objets de cds — la modification est immédiate
 function resolveOLCovers(items) {
-  // items peut être une copie filtrée — on travaille directement sur cds par id
-  const idSet = new Set(items.map(c => c.id));
   let updated = 0;
-  cds.forEach(item => {
-    if (!idSet.has(item.id)) return;
-    // Cas 1 : placeholder __ol__<isbn>
+  items.forEach(item => {
+    // Récupère l'ISBN depuis le placeholder ou depuis extId
+    let isbn = '';
     if ((item.cover||'').startsWith('__ol__')) {
-      const isbn = item.cover.replace('__ol__', '').replace(/-/g, '');
-      item.cover = isbn ? `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg` : '';
-      updated++;
+      isbn = item.cover.replace('__ol__', '');
+    } else if (item.extId) {
+      isbn = item.extId;
     }
-    // Cas 2 : cover vide mais ISBN présent dans extId (données importées avant la correction)
-    else if ((item.cover||'') === '' && item.extId) {
-      const isbn = item.extId.replace(/-/g, '');
-      item.cover = `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg`;
-      updated++;
-    }
+    isbn = isbn.replace(/-/g, '');
+    if (!isbn) return;
+    item.cover = `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg`;
+    updated++;
   });
   if (updated > 0) { saveLibrary(); renderList(); }
 }
