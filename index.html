@@ -501,6 +501,11 @@ async function loadLibrary() {
         allGenres = req.result.genres || [];
         renderGenreChips();
         showNotif(`📚 ${cds.length} médias chargés`);
+        // Résout en arrière-plan les couvertures encore en attente
+        const pendingTmdb = cds.filter(c => (c.cover||'').startsWith('__tmdb__'));
+        const pendingOL   = cds.filter(c => (c.cover||'').startsWith('__ol__'));
+        if (pendingTmdb.length) resolveTmdbCovers(pendingTmdb);
+        if (pendingOL.length)   resolveOLCovers(pendingOL);
       }
       renderList();
     };
