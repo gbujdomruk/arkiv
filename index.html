@@ -59,7 +59,9 @@
   .detail-header{padding:16px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);flex-shrink:0;}
   .back-btn{background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:18px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
   .detail-cover-img{width:200px;height:200px;border-radius:20px;object-fit:cover;display:block;margin:24px auto 0;}
+  .detail-cover-img.portrait{width:150px;height:220px;border-radius:12px;}
   .detail-cover-placeholder{width:200px;height:200px;border-radius:20px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:70px;margin:24px auto 0;}
+  .detail-cover-placeholder.portrait{width:150px;height:220px;border-radius:12px;font-size:60px;}
   .detail-body{padding:20px;}
   .detail-title{font-size:24px;font-weight:800;letter-spacing:-0.5px;}
   .detail-artist{font-size:16px;color:var(--muted);margin-top:4px;}
@@ -1570,9 +1572,11 @@ function showDetail(id) {
   document.getElementById('detail-fav-btn').textContent = cd.fav?'⭐':'☆';
   const cw = document.getElementById('detail-cover-wrap');
   const validCover = cd.cover && !cd.cover.startsWith('__tmdb__') && !cd.cover.startsWith('__ol__');
+  const isPortrait = ['BD','Manga','Comics','DVD','Blu-ray','Série'].includes(cd.mediaType);
+  const portraitClass = isPortrait ? ' portrait' : '';
   cw.innerHTML = validCover
-    ? `<img class="detail-cover-img" src="${cd.cover}" alt="" onerror="this.outerHTML='<div class=detail-cover-placeholder>${getEmoji(cd.genre, cd.mediaType)}</div>'">`
-    : `<div class="detail-cover-placeholder">${getEmoji(cd.genre, cd.mediaType)}</div>`;
+    ? `<img class="detail-cover-img${portraitClass}" src="${cd.cover}" alt="" onerror="this.outerHTML='<div class=detail-cover-placeholder${portraitClass}>${getEmoji(cd.genre, cd.mediaType)}</div>'">`
+    : `<div class="detail-cover-placeholder${portraitClass}">${getEmoji(cd.genre, cd.mediaType)}</div>`;
   let tags = '';
   if(cd.mediaType) tags += `<span class="detail-tag" style="color:var(--accent2);border-color:rgba(255,107,53,0.3)">${cd.mediaType}</span>`;
   if(cd.genre) tags += `<span class="detail-tag accent">${cd.genre}</span>`;
