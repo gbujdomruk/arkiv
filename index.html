@@ -147,7 +147,7 @@
 <div class="screen active" id="screen-list">
   <div class="header">
     <div class="logo"><span>Ark</span>iv</div>
-    <div class="header-stats"><strong id="total-count">…</strong>albums</div>
+    <div class="header-stats"><strong id="total-count">…</strong>médias</div>
   </div>
   <div class="search-wrap">
     <input class="search-input" id="search-input" placeholder="Rechercher artiste, titre…" oninput="onSearch()" onkeydown="onSearchSubmit(event)">
@@ -561,7 +561,7 @@ function importCSV(event) {
           rating: header.indexOf('rating'), favorites: header.indexOf('favorites')
         };
         document.getElementById('progress-fill').style.width = '60%';
-        document.getElementById('load-status').textContent = `Analyse de ${lines.length-1} albums…`;
+        document.getElementById('load-status').textContent = `Analyse de ${lines.length-1} médias…`;
         const imported = []; const genreSet = new Set();
         for (let i = 1; i < lines.length; i++) {
           if (!lines[i].trim()) continue;
@@ -1481,7 +1481,7 @@ function setMediaType(mtype) {
 function applyFilter() {
   const q = document.getElementById('search-input').value.toLowerCase().trim();
   filtered = cds.filter(cd => {
-    const m = !q || cd.title.toLowerCase().includes(q) || cd.artist.toLowerCase().includes(q) || (cd.genre||'').toLowerCase().includes(q);
+    const m = !q || cd.title.toLowerCase().includes(q) || (cd.artist||'').toLowerCase().includes(q) || (cd.genre||'').toLowerCase().includes(q) || (cd.notes||'').toLowerCase().includes(q);
     const genreMatch = !currentGenre || (cd.genre||'').split(',').map(g=>g.trim()).includes(currentGenre) || (cd.genre||'').includes(currentGenre);
     const favMatch = !favsOnly || cd.fav;
     const mt = cd.mediaType || 'CD';
@@ -1505,7 +1505,10 @@ function applyFilter() {
 
 function renderList() {
   applyFilter();
-  document.getElementById('total-count').textContent = cds.length;
+  const countEl = document.getElementById('total-count');
+  countEl.textContent = filtered.length !== cds.length
+    ? filtered.length + ' / ' + cds.length
+    : cds.length;
   const list = document.getElementById('cd-list');
   if (!filtered.length) {
     list.innerHTML = `<div class="empty-state"><div class="big">${cds.length?'🔍':'📂'}</div><p>${cds.length?'Aucun résultat.':'Importez votre catalogue CSV<br>ou scannez un code-barres.'}</p></div>`;
@@ -1516,7 +1519,7 @@ function renderList() {
     <div class="cd-card" onclick="showDetail(${cd.id})">
       <div class="cd-cover">${cd.cover && !cd.cover.startsWith('__tmdb__')
         ? `<img src="${cd.cover}" alt="" onerror="this.parentElement.innerHTML='<div style=font-size:24px>${getEmoji(cd.genre, cd.mediaType)}</div>'">`
-        : `<div style="font-size:24px">${getEmoji(cd.genre, cd.mediaType)}</div>`}</div>
+        : `<div style="font-size:28px;display:flex;align-items:center;justify-content:center;width:100%;height:100%;">${getEmoji(cd.genre, cd.mediaType)}</div>`}</div>
       <div class="cd-info">
         <div class="cd-title">${cd.title||'Sans titre'}</div>
         <div class="cd-artist">${cd.artist||'Artiste inconnu'}</div>
@@ -1546,7 +1549,9 @@ function showDetail(id) {
   currentDetailId = id;
   document.getElementById('detail-header-title').textContent = cd.artist;
   document.getElementById('detail-title').textContent = cd.title;
-  document.getElementById('detail-artist').textContent = cd.artist;
+  const artistLabel = VIDEO_TYPES.includes(cd.mediaType||'') ? 'Réal. : ' : 
+    BOOK_TYPES.includes(cd.mediaType||'') ? '' : '';
+  document.getElementById('detail-artist').textContent = artistLabel + (cd.artist||'');
   document.getElementById('detail-fav-btn').textContent = cd.fav?'⭐':'☆';
   const cw = document.getElementById('detail-cover-wrap');
   const validCover = cd.cover && !cd.cover.startsWith('__tmdb__');
@@ -1696,7 +1701,7 @@ function renderStats() {
       <div class="stat-card"><div class="stat-val">${avgR>0?'★ '+avgR.toFixed(1):'—'}</div><div class="stat-key">note moyenne</div></div>
       <div class="stat-card"><div class="stat-val">${topD?topD[0]+'s':'—'}</div><div class="stat-key">décennie phare</div></div>
     </div>
-    ${topA?`<div class="stat-card"><div style="font-size:11px;font-family:'Space Mono',monospace;color:var(--muted);margin-bottom:6px;">ARTISTE LE PLUS REPRÉSENTÉ</div><div style="font-size:18px;font-weight:700;">${topA[0]}</div><div class="stat-key">${topA[1]} albums</div></div>`:''}
+    ${topA?`<div class="stat-card"><div style="font-size:11px;font-family:'Space Mono',monospace;color:var(--muted);margin-bottom:6px;">ARTISTE LE PLUS REPRÉSENTÉ</div><div style="font-size:18px;font-weight:700;">${topA[0]}</div><div class="stat-key">${topA[1]} médias</div></div>`:''}
     ${topG.length?`<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;"><div style="font-size:12px;font-family:'Space Mono',monospace;color:var(--muted);margin-bottom:14px;">GENRES</div><div class="genre-bars">${topG.map(([g,n])=>`<div class="genre-row"><div class="genre-name">${g}</div><div class="genre-bar-wrap"><div class="genre-bar-fill" style="width:${Math.round(n/maxG*100)}%"></div></div><div class="genre-count">${n}</div></div>`).join('')}</div></div>`:''}
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;">
       <button class="btn-action primary" onclick="exportCSV()">⬇ Exporter en CSV</button>
