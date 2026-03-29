@@ -508,8 +508,9 @@ async function loadLibrary() {
         // BD/Manga sans couverture : soit placeholder __ol__, soit cover vide avec un ISBN dans extId
         const pendingOL = cds.filter(c =>
           ['BD','Manga'].includes(c.mediaType) &&
-          (c.cover||'') === '' || (c.cover||'').startsWith('__ol__')
-        ).filter(c => c.extId).slice(0, STARTUP_LIMIT);
+          ((c.cover||'') === '' || (c.cover||'').startsWith('__ol__')) &&
+          c.extId
+        ).slice(0, STARTUP_LIMIT);
         if (pendingTmdb.length) setTimeout(() => resolveTmdbCovers(pendingTmdb), 2000);
         if (pendingOL.length)   setTimeout(() => resolveOLCovers(pendingOL), 2000);
       }
