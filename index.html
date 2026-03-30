@@ -304,7 +304,10 @@
         <button class="btn-action primary" id="start-cam-btn" onclick="startCamera()" style="flex:none;padding:10px 24px;">📷 Activer la caméra</button>
         <button class="btn-action" id="stop-cam-btn" onclick="stopCamera()" style="flex:none;padding:10px 16px;display:none;">■ Arrêter</button>
       </div>
-      <div class="scan-hint">Pointez vers le code-barres (EAN/UPC/ISBN).<br>Identifie CDs, DVDs, Blu-ray et livres.<br>Détection automatique sur <strong style="color:var(--text)">Chrome Android</strong> et <strong style="color:var(--text)">Safari iOS 17+</strong>.<br><br>
+      <div class="scan-hint">Pointez vers le code-barres (EAN/UPC/ISBN).<br>
+        <strong style="color:var(--text)">ISBN (978…/979…)</strong> → Livres, BD, Mangas<br>
+        <strong style="color:var(--text)">Autres codes</strong> → CDs, Vinyles, DVDs, Blu-ray<br>
+        Détection auto sur <strong style="color:var(--text)">Chrome Android</strong> et <strong style="color:var(--text)">Safari iOS 17+</strong>.<br><br>
         <span style="color:rgba(136,136,128,0.6);font-size:10px;">Autorisez la caméra si demandé.</span>
       </div>
       <div id="scan-status" class="scan-status"></div>
@@ -1169,7 +1172,68 @@ async function lookupBarcode(code) {
   const cleanCode = code.replace(/\D/g, '');
   const isISBN    = cleanCode.startsWith('978') || cleanCode.startsWith('979');
 
-  // ══ 1. DISCOGS (musique — toujours en premier) ════════
+  // ══ Routage intelligent selon le type de code-barres ══
+  // ISBN (978/979) → priorité livres/BD, pas musique ni DVD
+  // Autres → musique d'abord, puis DVD/Blu-ray
+
+  // ══ 1. LIVRES / BD (ISBN uniquement) ══════════════════
+  if (isISBN) {
+    try {
+      showScanStatus('searching', '🔍 Recherche livre/BD…');
+      const gbKey = localStorage.getItem('gbooks_api_key') || '';
+      const gbUrl = gbKey
+        ? `https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanCode}&key=${gbKey}`
+        : `https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanCode}`;
+      const gbRes = await fetch(gbUrl);
+      if (gbRes.ok) {
+        const data = await gbRes.json();
+        if (data.totalItems > 0 && data.items?.length) {
+          const info   = data.items[0].volumeInfo;
+          const title  = info.title || '';
+          const author = (info.authors || []).join(', ');
+          const year   = info.publishedDate ? parseInt(info.publishedDate) : null;
+          const rawGenre = (info.categories || [''])[0];
+          const cover  = info.imageLinks?.thumbnail?.replace('http:','https:') || '';
+          const extId  = data.items[0].id || '';
+          const isBD   = /comic|manga|bande|graphic/i.test(rawGenre + ' ' + (info.description||''));
+          const mediaType = isBD ? 'BD' : 'Roman';
+          const genre  = isBD ? 'BD' : (rawGenre || 'Roman');
+          showFoundResult({title, artist:author, year, genre, mediaType, cover, discogs:'', extId, summary:info.description||'', code, source:'Google Books'});
+          return;
+        }
+      }
+    } catch(e) { console.warn('Google Books error', e); }
+
+    // Fallback Open Library
+    try {
+      const olRes = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${cleanCode}&format=json&jscmd=data`);
+      if (olRes.ok) {
+        const data = await olRes.json();
+        const key = Object.keys(data)[0];
+        if (key && data[key]) {
+          const b = data[key];
+          const subjects = (b.subjects || []).map(s => (s.name||s||'').toLowerCase()).join(' ');
+          const isBD = /comic|manga|bande|graphic|bd/.test(subjects);
+          showFoundResult({
+            title:b.title||'', artist:b.authors?.[0]?.name||'',
+            year:b.publish_date?parseInt(b.publish_date):null,
+            genre: isBD ? 'BD' : 'Roman',
+            mediaType: isBD ? 'BD' : 'Roman',
+            cover:b.cover?.medium||b.cover?.large||'',
+            discogs:'', extId:'', summary:'', code, source:'Open Library'
+          });
+          return;
+        }
+      }
+    } catch(e) { console.warn('Open Library error', e); }
+
+    // ISBN non trouvé nulle part
+    showScanStatus('notfound', '❌ Livre/BD non trouvé. Complétez manuellement.');
+    setTimeout(() => prefillForm({title:'', artist:'', year:null, genre:'', cover:'', mediaType:'Roman', notes:`ISBN: ${code}`}), 1800);
+    return;
+  }
+
+  // ══ 2. DISCOGS (musique — codes non-ISBN) ═════════════
   try {
     const oauthToken  = localStorage.getItem('discogs_oauth_token')  || '';
     const oauthSecret = localStorage.getItem('discogs_oauth_secret') || '';
@@ -1181,15 +1245,22 @@ async function lookupBarcode(code) {
       if (res.ok) {
         const data = await res.json();
         if (data.results && data.results.length) {
-          // Vérifie que c'est bien de la musique (pas un DVD dans Discogs)
           const r = data.results[0];
           const formats = (r.format || []).map(f => f.toLowerCase());
-          const isMusic = formats.some(f => f.includes('cd') || f.includes('vinyl') || f.includes('lp') || f.includes('album') || f.includes('single') || f.includes('mp3'))
-            || (r.genre || []).some(g => !['Film','Movie','Video'].includes(g));
-          if (isMusic || !formats.length) {
+          // Exclut explicitement les formats vidéo présents dans Discogs
+          const isVideoFormat = formats.some(f => f.includes('dvd') || f.includes('vhs') || f.includes('blu'));
+          const isMusic = !isVideoFormat && (
+            formats.some(f => f.includes('cd') || f.includes('vinyl') || f.includes('lp') || f.includes('album') || f.includes('single') || f.includes('mp3') || f.includes('cassette'))
+            || (r.genre || []).some(g => !['Film','Movie','Video'].includes(g))
+            || formats.length === 0
+          );
+          if (isMusic) {
             const title  = r.title?.includes(' - ') ? r.title.split(' - ').slice(1).join(' - ') : (r.title || '');
             const artist = r.title?.includes(' - ') ? r.title.split(' - ')[0] : '';
             const year   = r.year ? parseInt(r.year) : null;
+            // Détermine le type exact : Vinyle vs CD
+            const isVinyl = formats.some(f => f.includes('vinyl') || f.includes('lp'));
+            const mediaType = isVinyl ? 'Vinyle' : 'CD';
             let genre = '';
             for (const s of [...(r.style||[]), ...(r.genre||[])]) {
               const resolved = resolveGenre(s);
@@ -1198,7 +1269,7 @@ async function lookupBarcode(code) {
             if (!genre && r.genre?.length) genre = r.genre[0];
             const cover     = r.cover_image || r.thumb || '';
             const discogsId = r.id ? String(r.id) : '';
-            showFoundResult({title, artist, year, genre, mediaType:'CD', cover, discogs: discogsId, code, source:'Discogs'});
+            showFoundResult({title, artist, year, genre, mediaType, cover, discogs: discogsId, code, source:'Discogs'});
             return;
           }
         }
@@ -1324,56 +1395,6 @@ async function lookupBarcode(code) {
     }
   } catch(e) { console.warn('MusicBrainz error', e); }
 
-  // ══ 4. GOOGLE BOOKS + OPEN LIBRARY (ISBN livres & BD) ═
-  if (isISBN) {
-    try {
-      showScanStatus('searching', '🔍 Recherche livre/BD…');
-      const gbKey = localStorage.getItem('gbooks_api_key') || '';
-      const gbUrl = gbKey
-        ? `https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanCode}&key=${gbKey}`
-        : `https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanCode}`;
-      const gbRes = await fetch(gbUrl);
-      if (gbRes.ok) {
-        const data = await gbRes.json();
-        if (data.totalItems > 0 && data.items?.length) {
-          const info  = data.items[0].volumeInfo;
-          const title = info.title || '';
-          const author= (info.authors || []).join(', ');
-          const year  = info.publishedDate ? parseInt(info.publishedDate) : null;
-          const rawGenre = (info.categories || [''])[0];
-          const cover = info.imageLinks?.thumbnail?.replace('http:','https:') || '';
-          const extId = data.items[0].id || '';
-          // Détermine si BD/Manga selon catégorie Google Books
-          const isBD = /comic|manga|bande|graphic/i.test(rawGenre + ' ' + (info.description||''));
-          const mediaType = isBD ? 'BD' : 'Roman';
-          const genre = isBD ? 'BD' : (rawGenre || 'Roman');
-          showFoundResult({title, artist:author, year, genre, mediaType, cover, discogs:'', extId, summary:info.description||'', code, source:'Google Books'});
-          return;
-        }
-      }
-      // Fallback Open Library
-      const olRes = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${cleanCode}&format=json&jscmd=data`);
-      if (olRes.ok) {
-        const data = await olRes.json();
-        const key = Object.keys(data)[0];
-        if (key && data[key]) {
-          const b = data[key];
-          const subjects = (b.subjects || []).map(s => (s.name||s||'').toLowerCase()).join(' ');
-          const isBD = /comic|manga|bande|graphic|bd/.test(subjects);
-          showFoundResult({
-            title:b.title||'', artist:b.authors?.[0]?.name||'',
-            year:b.publish_date?parseInt(b.publish_date):null,
-            genre: isBD ? 'BD' : 'Roman',
-            mediaType: isBD ? 'BD' : 'Roman',
-            cover:b.cover?.medium||b.cover?.large||'',
-            discogs:'', extId:'', summary:'', code, source:'Open Library'
-          });
-          return;
-        }
-      }
-    } catch(e) { console.warn('Books error', e); }
-  }
-
   // ══ 5. Rien trouvé → recherche manuelle TMDB ou formulaire ═
   if (tmdbKey) {
     showScanStatus('notfound', '❌ Code-barres non reconnu. Cherchez par titre :');
@@ -1448,18 +1469,34 @@ function pickTmdbResult(i) {
 // Résultat courant du scanner — évite tout JSON dans les onclick
 let _scanResult = null;
 
+function mediaEmoji(mediaType) {
+  const m = (mediaType||'').toLowerCase();
+  if (m === 'vinyle') return '🎵';
+  if (m === 'dvd' || m === 'blu-ray') return '📀';
+  if (m === 'série' || m === 'serie') return '📺';
+  if (m === 'livre' || m === 'roman') return '📖';
+  if (m === 'bd' || m === 'manga' || m === 'comics') return '🎨';
+  if (m === 'mp3') return '🎧';
+  return '💿';
+}
+
 function showFoundResult(cd) {
   _scanResult = cd;
+  const emoji = mediaEmoji(cd.mediaType);
+  const isPortrait = ['DVD','Blu-ray','Série','Livre','Roman','BD','Manga','Comics'].includes(cd.mediaType||'');
+  const imgStyle = isPortrait
+    ? 'width:42px;height:56px;border-radius:6px;object-fit:cover;flex-shrink:0;'
+    : 'width:56px;height:56px;border-radius:10px;object-fit:cover;flex-shrink:0;';
   showScanStatus('found', '✅ Média identifié !');
   document.getElementById('scan-result-wrap').innerHTML = `
     <div class="scan-result-card">
       ${cd.cover
-        ? `<img class="scan-result-img" src="${cd.cover}" alt="" onerror="this.outerHTML='<div class=scan-result-img>💿</div>'" style="font-size:28px;">`
-        : `<div class="scan-result-img">💿</div>`}
+        ? `<img src="${cd.cover}" alt="" onerror="this.outerHTML='<div class=scan-result-img style=flex-shrink:0>${emoji}</div>'" style="${imgStyle}">`
+        : `<div class="scan-result-img" style="flex-shrink:0;">${emoji}</div>`}
       <div class="scan-result-info">
         <div class="scan-result-title">${cd.title || 'Titre inconnu'}</div>
         <div class="scan-result-artist">${cd.artist || ''}${cd.year ? ' · '+cd.year : ''}</div>
-        <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);margin-top:4px;">via ${cd.source}</div>
+        <div style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);margin-top:4px;">${cd.mediaType||'CD'} · via ${cd.source}</div>
       </div>
     </div>
     <div style="display:flex;gap:10px;margin-top:10px;">
