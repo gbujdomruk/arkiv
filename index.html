@@ -226,35 +226,24 @@
   <div class="scroll-area">
     <div class="form-body">
       <div style="display:flex;flex-direction:column;gap:8px;">
-        <div class="import-zone" id="import-zone" onclick="document.getElementById('csvFileInput').click()">
-          <div style="font-size:24px;margin-bottom:4px;">🎵 📂</div>
-          <div style="font-weight:700;font-size:14px;color:var(--text);">Importer MusicBuddy CSV</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:2px;">Albums, CDs, vinyles…</div>
+        <div class="import-zone" id="import-zone-auto" onclick="document.getElementById('csvFileInputAuto').click()">
+          <div style="font-size:32px;margin-bottom:8px;">📂</div>
+          <div style="font-weight:700;font-size:15px;color:var(--text);">Importer un catalogue CSV</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.6;">MusicBuddy · MovieBuddy · BookBuddy · BDthèque<br>Format détecté automatiquement</div>
         </div>
-        <div class="import-zone" id="import-zone-movie" onclick="document.getElementById('csvFileInputMovie').click()">
-          <div style="font-size:24px;margin-bottom:4px;">🎬 📂</div>
-          <div style="font-weight:700;font-size:14px;color:var(--text);">Importer MovieBuddy CSV</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:2px;">Films, séries, DVD, Blu-ray…</div>
-        </div>
-        <div class="import-zone" id="import-zone-book" onclick="document.getElementById('csvFileInputBook').click()">
-          <div style="font-size:24px;margin-bottom:4px;">📚 📂</div>
-          <div style="font-weight:700;font-size:14px;color:var(--text);">Importer BookBuddy CSV</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:2px;">Romans, essais, livres…</div>
-        </div>
-        <div class="import-zone" id="import-zone-bd" onclick="document.getElementById('csvFileInputBd').click()">
-          <div style="font-size:24px;margin-bottom:4px;">🎨 📂</div>
-          <div style="font-weight:700;font-size:14px;color:var(--text);">Importer BDthèque (bdphile)</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:2px;">BD, mangas, comics…</div>
+        <!-- Confirmation de format détecté -->
+        <div id="import-confirm" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;">
+          <div style="font-size:12px;font-family:'Space Mono',monospace;color:var(--muted);margin-bottom:8px;">FORMAT DÉTECTÉ</div>
+          <div id="import-confirm-label" style="font-size:16px;font-weight:700;margin-bottom:12px;"></div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Ce n'est pas le bon format ?</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;" id="import-confirm-btns"></div>
         </div>
       </div>
       <div id="import-progress" style="display:none;">
         <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
         <div class="load-status" id="load-status">Chargement…</div>
       </div>
-      <input type="file" id="csvFileInput" accept=".csv" onchange="importCSV(event)" style="display:none">
-      <input type="file" id="csvFileInputMovie" accept=".csv" onchange="importMovieCSV(event)" style="display:none">
-      <input type="file" id="csvFileInputBook" accept=".csv" onchange="importBookCSV(event)" style="display:none">
-      <input type="file" id="csvFileInputBd" accept=".csv,.tsv" onchange="importBdCSV(event)" style="display:none">
+      <input type="file" id="csvFileInputAuto" accept=".csv,.tsv" onchange="detectAndImport(event)" style="display:none">
       <div style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;">
         <div style="flex:1;height:1px;background:var(--border);"></div><span>ou saisir manuellement</span><div style="flex:1;height:1px;background:var(--border);"></div>
       </div>
@@ -555,6 +544,75 @@ function getEmoji(genre, mediaType) {
 function parseTracks(raw){if(!raw)return[];try{return JSON.parse(raw).map(t=>({name:t.title.replace(/^\d+[-.\s]+/,'').replace(/^\d+-\d+\.\s+/,''),dur:t.duration||0}));}catch(e){return[];}}
 function parseGenre(raw){if(!raw)return'';try{const a=JSON.parse(raw);return Array.isArray(a)?a[0]||'':raw;}catch(e){return raw.split(',')[0].trim();}}
 function parseCSVLine(line){const r=[];let cur='',inQ=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){if(inQ&&line[i+1]==='"'){cur+='"';i++;}else inQ=!inQ;}else if(c===','&&!inQ){r.push(cur);cur='';}else cur+=c;}r.push(cur);return r;}
+
+// ═══ DÉTECTION AUTOMATIQUE DU FORMAT CSV ════════════════
+function detectFormat(headerLine, isTsv) {
+  const h = headerLine.toLowerCase();
+  // BDthèque : TSV avec colonnes françaises
+  if (isTsv && (h.includes('série') || h.includes('tome') || h.includes('éditeur'))) return 'bd';
+  // MovieBuddy : colonnes spécifiques
+  if (h.includes('content type') || h.includes('tmdb id') || h.includes('directors')) return 'movie';
+  // MusicBuddy : colonnes spécifiques
+  if (h.includes('discogs release id') || (h.includes('tracks') && h.includes('artist'))) return 'music';
+  // BookBuddy : colonnes spécifiques
+  if (h.includes('number of pages') || h.includes('year published') || h.includes('author')) return 'book';
+  return null; // format inconnu
+}
+
+const FORMAT_LABELS = {
+  music: '🎵 MusicBuddy — Albums, CDs, vinyles',
+  movie: '🎬 MovieBuddy — Films, séries, DVD, Blu-ray',
+  book:  '📚 BookBuddy — Romans, livres',
+  bd:    '🎨 BDthèque — BD, mangas, comics',
+};
+
+let _pendingImportEvent = null;
+
+function detectAndImport(event) {
+  const file = event.target.files[0]; if (!file) return;
+  _pendingImportEvent = event;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const text = e.target.result;
+    // Détecter si TSV (BDthèque) ou CSV
+    const firstLine = text.split('\n')[0];
+    const isTsv = firstLine.includes('\t') || file.name.endsWith('.tsv');
+    const detected = detectFormat(firstLine, isTsv);
+    if (!detected) {
+      showNotif('⚠️ Format non reconnu — vérifiez votre fichier');
+      event.target.value = '';
+      _pendingImportEvent = null;
+      return;
+    }
+    // Afficher la confirmation
+    const confirmDiv = document.getElementById('import-confirm');
+    const labelDiv = document.getElementById('import-confirm-label');
+    const btnsDiv = document.getElementById('import-confirm-btns');
+    labelDiv.textContent = FORMAT_LABELS[detected];
+    // Bouton confirmer + boutons alternatifs
+    const allFormats = ['music','movie','book','bd'];
+    btnsDiv.innerHTML = `<button class="btn-action primary" onclick="confirmImport('${detected}')" style="flex:2;">✅ Confirmer</button>`
+      + allFormats.filter(f => f !== detected).map(f =>
+        `<button class="btn-action" onclick="confirmImport('${f}')" style="font-size:11px;padding:8px;">${FORMAT_LABELS[f].split('—')[0].trim()}</button>`
+      ).join('');
+    confirmDiv.style.display = 'block';
+    // Scroll vers la confirmation
+    confirmDiv.scrollIntoView({behavior:'smooth', block:'nearest'});
+  };
+  // Lire en UTF-16LE si .tsv (BDthèque), sinon UTF-8
+  reader.readAsText(file, file.name.endsWith('.tsv') ? 'UTF-16LE' : 'UTF-8');
+}
+
+function confirmImport(format) {
+  document.getElementById('import-confirm').style.display = 'none';
+  if (!_pendingImportEvent) return;
+  const ev = _pendingImportEvent;
+  _pendingImportEvent = null;
+  if (format === 'music') importCSV(ev);
+  else if (format === 'movie') importMovieCSV(ev);
+  else if (format === 'book') importBookCSV(ev);
+  else if (format === 'bd') importBdCSV(ev);
+}
 
 // ═══ IMPORT CSV ══════════════════════════════════════════
 function importCSV(event) {
@@ -1203,30 +1261,29 @@ async function lookupBarcode(code) {
     }
   } catch(e) { console.warn('MusicBrainz fallback error', e); }
 
-  // ── TMDB (DVDs, Blu-ray, films) ──────────────────────
+  // ── TMDB (DVDs, Blu-ray, films) — recherche par UPC/EAN ──
   try {
     const tmdbKey = localStorage.getItem('tmdb_api_key') || '';
     if (tmdbKey) {
-      const tmdbRes = await fetch(
-        `https://api.themoviedb.org/3/find/${cleanCode}?api_key=${tmdbKey}&external_source=imdb_id&language=fr-FR`,
-        { headers: { 'Accept': 'application/json' } }
-      );
-      // Essaie aussi par recherche directe
-      const searchRes = await fetch(
-        `https://api.themoviedb.org/3/search/movie?api_key=${tmdbKey}&query=${cleanCode}&language=fr-FR`,
-        { headers: { 'Accept': 'application/json' } }
-      );
-      if (searchRes.ok) {
-        const data = await searchRes.json();
-        if (data.results && data.results.length) {
-          const m = data.results[0];
-          const title  = m.title || m.original_title || '';
-          const year   = m.release_date ? parseInt(m.release_date) : null;
-          const genre  = 'Film';
-          const cover  = m.poster_path ? `https://image.tmdb.org/t/p/w342${m.poster_path}` : '';
-          const extId  = String(m.id);
-          showFoundResult({title, artist:'', year, genre, cover, discogs:'', extId, mediaType:'DVD', summary: m.overview||'', code, source:'TMDB'});
-          return;
+      // Méthode 1 : recherche directe par UPC (le bon endpoint)
+      for (const extSrc of ['upc_code', 'imdb_id']) {
+        const res = await fetch(
+          `https://api.themoviedb.org/3/find/${cleanCode}?api_key=${tmdbKey}&external_source=${extSrc}&language=fr-FR`,
+          { headers: { 'Accept': 'application/json' } }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const results = [...(data.movie_results||[]), ...(data.tv_results||[])];
+          if (results.length) {
+            const m = results[0];
+            const isTV = !!data.tv_results?.length;
+            const title  = m.title || m.name || m.original_title || '';
+            const year   = (m.release_date || m.first_air_date || '').slice(0,4);
+            const cover  = m.poster_path ? `https://image.tmdb.org/t/p/w342${m.poster_path}` : '';
+            const mediaType = isTV ? 'Série' : 'DVD';
+            showFoundResult({title, artist:'', year: year?parseInt(year):null, genre:'', cover, discogs:'', extId:String(m.id), mediaType, summary:m.overview||'', code, source:'TMDB'});
+            return;
+          }
         }
       }
     }
@@ -1718,29 +1775,17 @@ function handleOAuthCallback() {
 function showNotif(msg){const n=document.getElementById('notif');n.textContent=msg;n.classList.add('show');setTimeout(()=>n.classList.remove('show'),2500);}
 
 // Drag & drop CSV
-const iz=document.getElementById('import-zone');
-iz.addEventListener('dragover',e=>{e.preventDefault();iz.classList.add('dragover');});
-iz.addEventListener('dragleave',()=>iz.classList.remove('dragover'));
-iz.addEventListener('drop',e=>{e.preventDefault();iz.classList.remove('dragover');const f=e.dataTransfer.files[0];if(f){const dt=new DataTransfer();dt.items.add(f);document.getElementById('csvFileInput').files=dt.files;importCSV({target:{files:[f],value:''}});}});
-
-// Drag & drop MovieBuddy
-const izm = document.getElementById('import-zone-movie');
-if (izm) {
-  izm.addEventListener('dragover',e=>{e.preventDefault();izm.classList.add('dragover');});
-  izm.addEventListener('dragleave',()=>izm.classList.remove('dragover'));
-  izm.addEventListener('drop',e=>{e.preventDefault();izm.classList.remove('dragover');const f=e.dataTransfer.files[0];if(f){importMovieCSV({target:{files:[f],value:''}});}});
+// Drag & drop zone unique
+const izAuto = document.getElementById('import-zone-auto');
+if (izAuto) {
+  izAuto.addEventListener('dragover', e=>{e.preventDefault();izAuto.classList.add('dragover');});
+  izAuto.addEventListener('dragleave', ()=>izAuto.classList.remove('dragover'));
+  izAuto.addEventListener('drop', e=>{
+    e.preventDefault(); izAuto.classList.remove('dragover');
+    const f = e.dataTransfer.files[0];
+    if (f) detectAndImport({target:{files:[f],value:''}});
+  });
 }
-
-// Drag & drop BookBuddy et BDthèque
-['import-zone-book','import-zone-bd'].forEach((zoneId, i) => {
-  const inputId = ['csvFileInputBook','csvFileInputBd'][i];
-  const handler = [importBookCSV, importBdCSV][i];
-  const zone = document.getElementById(zoneId);
-  if (!zone) return;
-  zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('dragover');});
-  zone.addEventListener('dragleave',()=>zone.classList.remove('dragover'));
-  zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('dragover');const f=e.dataTransfer.files[0];if(f)handler({target:{files:[f],value:''}});});
-});
 
 
 // ═══ INIT ═════════════════════════════════════════════════
