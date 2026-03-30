@@ -1167,42 +1167,107 @@ async function lookupBarcode(code) {
   document.getElementById('scan-result-wrap').innerHTML = '';
 
   const cleanCode = code.replace(/\D/g, '');
+  const isISBN    = cleanCode.startsWith('978') || cleanCode.startsWith('979');
 
-  // ── Discogs via Worker OAuth ───────────────────────────
+  // ══ 1. DISCOGS (musique — toujours en premier) ════════
   try {
     const oauthToken  = localStorage.getItem('discogs_oauth_token')  || '';
     const oauthSecret = localStorage.getItem('discogs_oauth_secret') || '';
-    if (!oauthToken) {
-      showScanStatus('notfound', '⚙️ Non connecté à Discogs. Allez dans Réglages → Se connecter à Discogs.');
-      return;
-    }
-    const res = await fetch(
-      `${WORKER_URL}/search?q=${cleanCode}&token=${encodeURIComponent(oauthToken)}&secret=${encodeURIComponent(oauthSecret)}`,
-      { headers: { 'Accept': 'application/json' } }
-    );
-    if (res.ok) {
-      const data = await res.json();
-      if (data.results && data.results.length) {
-        const r = data.results[0];
-        const title  = r.title?.includes(' - ') ? r.title.split(' - ').slice(1).join(' - ') : (r.title || '');
-        const artist = r.title?.includes(' - ') ? r.title.split(' - ')[0] : '';
-        const year   = r.year ? parseInt(r.year) : null;
-        let genre = '';
-        for (const s of [...(r.style||[]), ...(r.genre||[])]) {
-          const resolved = resolveGenre(s);
-          if (resolved) { genre = resolved; break; }
+    if (oauthToken) {
+      const res = await fetch(
+        `${WORKER_URL}/search?q=${cleanCode}&token=${encodeURIComponent(oauthToken)}&secret=${encodeURIComponent(oauthSecret)}`,
+        { headers: { 'Accept': 'application/json' } }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.results && data.results.length) {
+          // Vérifie que c'est bien de la musique (pas un DVD dans Discogs)
+          const r = data.results[0];
+          const formats = (r.format || []).map(f => f.toLowerCase());
+          const isMusic = formats.some(f => f.includes('cd') || f.includes('vinyl') || f.includes('lp') || f.includes('album') || f.includes('single') || f.includes('mp3'))
+            || (r.genre || []).some(g => !['Film','Movie','Video'].includes(g));
+          if (isMusic || !formats.length) {
+            const title  = r.title?.includes(' - ') ? r.title.split(' - ').slice(1).join(' - ') : (r.title || '');
+            const artist = r.title?.includes(' - ') ? r.title.split(' - ')[0] : '';
+            const year   = r.year ? parseInt(r.year) : null;
+            let genre = '';
+            for (const s of [...(r.style||[]), ...(r.genre||[])]) {
+              const resolved = resolveGenre(s);
+              if (resolved) { genre = resolved; break; }
+            }
+            if (!genre && r.genre?.length) genre = r.genre[0];
+            const cover     = r.cover_image || r.thumb || '';
+            const discogsId = r.id ? String(r.id) : '';
+            showFoundResult({title, artist, year, genre, mediaType:'CD', cover, discogs: discogsId, code, source:'Discogs'});
+            return;
+          }
         }
-        if (!genre && r.genre?.length) genre = r.genre[0];
-        const cover     = r.cover_image || r.thumb || '';
-        const discogsId = r.id ? String(r.id) : '';
-        showFoundResult({title, artist, year, genre, cover, discogs: discogsId, code, source:'Discogs'});
-        return;
       }
     }
-  } catch(e) { console.warn('Discogs Worker error', e); }
+  } catch(e) { console.warn('Discogs error', e); }
 
-  // ── Fallback MusicBrainz ───────────────────────────────
+  // ══ 2. TMDB par code-barres (DVD/Blu-ray) ════════════
+  // Stratégie : UPCItemDB (gratuit, sans clé) → nom du produit → TMDB
+  const tmdbKey = localStorage.getItem('tmdb_api_key') || '';
+  if (tmdbKey && !isISBN) {
+    try {
+      showScanStatus('searching', '🔍 Recherche du film/série…');
+      // UPCItemDB : base de données produits par code-barres (100 req/jour gratuit)
+      const upcRes = await fetch(
+        `https://api.upcitemdb.com/prod/trial/lookup?upc=${cleanCode}`,
+        { headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' } }
+      );
+      if (upcRes.ok) {
+        const upcData = await upcRes.json();
+        if (upcData.items && upcData.items.length) {
+          const item = upcData.items[0];
+          // Nettoie le titre produit : enlève "DVD", "Blu-ray", "[Blu-ray]", etc.
+          let productTitle = (item.title || item.brand || '').trim();
+          productTitle = productTitle
+            .replace(/\[?(dvd|blu-?ray|4k|uhd|steelbook|edition|édition|collector|intégrale|saison|season|vol\.?\s*\d+)[^\]]*\]?/gi, '')
+            .replace(/\s+/g, ' ').trim();
+          if (productTitle.length > 2) {
+            const tmdbRes = await fetch(
+              `https://api.themoviedb.org/3/search/multi?api_key=${tmdbKey}&query=${encodeURIComponent(productTitle)}&language=fr-FR`,
+              { headers: { 'Accept': 'application/json' } }
+            );
+            if (tmdbRes.ok) {
+              const tmdbData = await tmdbRes.json();
+              const results = (tmdbData.results||[])
+                .filter(r => r.media_type === 'movie' || r.media_type === 'tv')
+                .slice(0, 1);
+              if (results.length) {
+                const m = results[0];
+                const isTV  = m.media_type === 'tv';
+                const title = m.title || m.name || '';
+                const year  = (m.release_date || m.first_air_date || '').slice(0,4);
+                const cover = m.poster_path ? `https://image.tmdb.org/t/p/w342${m.poster_path}` : '';
+                const mediaType = isTV ? 'Série' : 'DVD';
+                // Récupère les genres TMDB
+                let genre = '';
+                try {
+                  const detRes = await fetch(
+                    `https://api.themoviedb.org/3/${isTV?'tv':'movie'}/${m.id}?api_key=${tmdbKey}&language=fr-FR`,
+                    { headers: { 'Accept': 'application/json' } }
+                  );
+                  if (detRes.ok) {
+                    const det = await detRes.json();
+                    genre = det.genres?.[0]?.name || '';
+                  }
+                } catch(e) {}
+                showFoundResult({title, artist:'', year: year ? parseInt(year) : null, genre, mediaType, cover, discogs:'', extId:String(m.id), summary:m.overview||'', code, source:'TMDB'});
+                return;
+              }
+            }
+          }
+        }
+      }
+    } catch(e) { console.warn('UPCItemDB/TMDB error', e); }
+  }
+
+  // ══ 3. MUSICBRAINZ (fallback musique) ════════════════
   try {
+    showScanStatus('searching', '🔍 Recherche MusicBrainz…');
     const res = await fetch(
       `https://musicbrainz.org/ws/2/release/?query=barcode:${cleanCode}&fmt=json&limit=1`,
       { headers: {'User-Agent': 'Arkiv/1.0'} }
@@ -1226,7 +1291,7 @@ async function lookupBarcode(code) {
           if (isLatin(name)) return name;
           if (isLatin(sortName) && sortName.includes(',')) {
             const p = sortName.split(',').map(x => x.trim());
-            return p.length === 2 ? p[1] + ' ' + p[0] : sortName;
+            return p.length === 2 ? p[1]+' '+p[0] : sortName;
           }
           return isLatin(sortName) ? sortName : name;
         }).join('');
@@ -1250,70 +1315,71 @@ async function lookupBarcode(code) {
         }
         let cover = '';
         try {
-          const caRes = await fetch(
-            `https://coverartarchive.org/release/${releaseId}/front-250`,
-            { redirect: 'follow' }
-          );
+          const caRes = await fetch(`https://coverartarchive.org/release/${releaseId}/front-250`, {redirect:'follow'});
           if (caRes.ok) cover = caRes.url;
         } catch(e) {}
-        showFoundResult({title, artist, year, genre, cover, discogs:'', code, source:'MusicBrainz'});
+        showFoundResult({title, artist, year, genre, mediaType:'CD', cover, discogs:'', code, source:'MusicBrainz'});
         return;
       }
     }
-  } catch(e) { console.warn('MusicBrainz fallback error', e); }
+  } catch(e) { console.warn('MusicBrainz error', e); }
 
-
-  // ── Google Books + Open Library (ISBN livres uniquement) ──────
-  // Un ISBN commence par 978 ou 979 — ne pas tenter pour les UPC de DVD/CD
-  if (!cleanCode.startsWith('978') && !cleanCode.startsWith('979')) {
-    showScanStatus('notfound', '❌ Code-barres non reconnu. Cherchez par titre :');
-    // (suite gérée par le bloc notfound ci-dessous — on skip Google Books)
+  // ══ 4. GOOGLE BOOKS + OPEN LIBRARY (ISBN livres & BD) ═
+  if (isISBN) {
+    try {
+      showScanStatus('searching', '🔍 Recherche livre/BD…');
+      const gbKey = localStorage.getItem('gbooks_api_key') || '';
+      const gbUrl = gbKey
+        ? `https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanCode}&key=${gbKey}`
+        : `https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanCode}`;
+      const gbRes = await fetch(gbUrl);
+      if (gbRes.ok) {
+        const data = await gbRes.json();
+        if (data.totalItems > 0 && data.items?.length) {
+          const info  = data.items[0].volumeInfo;
+          const title = info.title || '';
+          const author= (info.authors || []).join(', ');
+          const year  = info.publishedDate ? parseInt(info.publishedDate) : null;
+          const rawGenre = (info.categories || [''])[0];
+          const cover = info.imageLinks?.thumbnail?.replace('http:','https:') || '';
+          const extId = data.items[0].id || '';
+          // Détermine si BD/Manga selon catégorie Google Books
+          const isBD = /comic|manga|bande|graphic/i.test(rawGenre + ' ' + (info.description||''));
+          const mediaType = isBD ? 'BD' : 'Roman';
+          const genre = isBD ? 'BD' : (rawGenre || 'Roman');
+          showFoundResult({title, artist:author, year, genre, mediaType, cover, discogs:'', extId, summary:info.description||'', code, source:'Google Books'});
+          return;
+        }
+      }
+      // Fallback Open Library
+      const olRes = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${cleanCode}&format=json&jscmd=data`);
+      if (olRes.ok) {
+        const data = await olRes.json();
+        const key = Object.keys(data)[0];
+        if (key && data[key]) {
+          const b = data[key];
+          const subjects = (b.subjects || []).map(s => (s.name||s||'').toLowerCase()).join(' ');
+          const isBD = /comic|manga|bande|graphic|bd/.test(subjects);
+          showFoundResult({
+            title:b.title||'', artist:b.authors?.[0]?.name||'',
+            year:b.publish_date?parseInt(b.publish_date):null,
+            genre: isBD ? 'BD' : 'Roman',
+            mediaType: isBD ? 'BD' : 'Roman',
+            cover:b.cover?.medium||b.cover?.large||'',
+            discogs:'', extId:'', summary:'', code, source:'Open Library'
+          });
+          return;
+        }
+      }
+    } catch(e) { console.warn('Books error', e); }
   }
-  if (cleanCode.startsWith('978') || cleanCode.startsWith('979')) try {
-    const isbn = cleanCode;
-    const gbKey = localStorage.getItem('gbooks_api_key') || '';
-    const gbUrl = gbKey
-      ? `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&key=${gbKey}&langRestrict=fr`
-      : `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`;
-    const gbRes = await fetch(gbUrl);
-    if (gbRes.ok) {
-      const data = await gbRes.json();
-      if (data.totalItems > 0 && data.items?.length) {
-        const info = data.items[0].volumeInfo;
-        const title  = info.title || '';
-        const author = (info.authors || []).join(', ');
-        const year   = info.publishedDate ? parseInt(info.publishedDate) : null;
-        const genre  = (info.categories || ['Roman'])[0];
-        const cover  = info.imageLinks?.thumbnail?.replace('http:','https:') || '';
-        const extId  = data.items[0].id || '';
-        showFoundResult({title, artist: author, year, genre, cover, discogs:'', extId, mediaType:'Roman', summary: info.description||'', code, source:'Google Books'});
-        return;
-      }
-    }
-    // Fallback Open Library (sans clé)
-    const olRes = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`);
-    if (olRes.ok) {
-      const data = await olRes.json();
-      const key = Object.keys(data)[0];
-      if (key && data[key]) {
-        const b = data[key];
-        const title  = b.title || '';
-        const author = b.authors?.[0]?.name || '';
-        const year   = b.publish_date ? parseInt(b.publish_date) : null;
-        const cover  = b.cover?.medium || b.cover?.large || '';
-        showFoundResult({title, artist: author, year, genre:'Roman', cover, discogs:'', extId:'', mediaType:'Roman', summary:'', code, source:'Open Library'});
-        return;
-      }
-    }
-  } catch(e) { console.warn('Books lookup error', e); }
 
-  // Non trouvé automatiquement — proposer recherche par titre
-  const tmdbKey = localStorage.getItem('tmdb_api_key') || '';
+  // ══ 5. Rien trouvé → recherche manuelle TMDB ou formulaire ═
   if (tmdbKey) {
     showScanStatus('notfound', '❌ Code-barres non reconnu. Cherchez par titre :');
     document.getElementById('scan-result-wrap').innerHTML = `
       <div style="display:flex;gap:8px;margin-top:8px;">
-        <input class="form-input" id="tmdb-title-search" placeholder="Titre du film ou de la série…" style="flex:1;" onkeydown="if(event.key==='Enter')searchTmdbByTitle()">
+        <input class="form-input" id="tmdb-title-search" placeholder="Titre du film, série, livre…" style="flex:1;" onkeydown="if(event.key==='Enter'){this.blur();searchTmdbByTitle();}">
         <button class="btn-action primary" onclick="searchTmdbByTitle()" style="flex:none;padding:12px 16px;">🔍</button>
       </div>
       <div id="tmdb-search-results" style="display:flex;flex-direction:column;gap:8px;margin-top:8px;"></div>`;
@@ -1323,6 +1389,7 @@ async function lookupBarcode(code) {
     setTimeout(() => prefillForm({title:'', artist:'', year:null, genre:'', cover:'', notes:`Code-barres: ${code}`}), 1800);
   }
 }
+
 
 // Stockage temporaire des résultats TMDB pour éviter le JSON dans les onclick
 let _tmdbResults = [];
