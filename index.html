@@ -1324,6 +1324,9 @@ async function lookupBarcode(code) {
   }
 }
 
+// Stockage temporaire des résultats TMDB pour éviter le JSON dans les onclick
+let _tmdbResults = [];
+
 async function searchTmdbByTitle() {
   const input = document.getElementById('tmdb-title-search');
   const query = input?.value.trim(); if (!query) return;
@@ -1337,23 +1340,42 @@ async function searchTmdbByTitle() {
     );
     const data = await res.json();
     const results = (data.results||[]).filter(r => r.media_type === 'movie' || r.media_type === 'tv').slice(0, 5);
-    if (!results.length) { resultsDiv.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;padding:8px;">Aucun résultat.</div>'; return; }
-    resultsDiv.innerHTML = results.map(m => {
+    if (!results.length) {
+      resultsDiv.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;padding:8px;">Aucun résultat.</div>';
+      return;
+    }
+    // Stocker les objets en mémoire — on ne met que l'index dans le onclick
+    _tmdbResults = results.map(m => {
       const isTV = m.media_type === 'tv';
       const title = m.title || m.name || '';
       const year = (m.release_date || m.first_air_date || '').slice(0,4);
-      const cover = m.poster_path ? `https://image.tmdb.org/t/p/w92${m.poster_path}` : '';
-      const cd = {title, artist:'', year:year?parseInt(year):null, genre:'', cover: m.poster_path ? `https://image.tmdb.org/t/p/w342${m.poster_path}` : '', discogs:'', extId:String(m.id), mediaType: isTV?'Série':'DVD', summary:m.overview||'', source:'TMDB'};
-      const cdJson = JSON.stringify(cd).replace(/"/g,'&quot;');
-      return `<div class="scan-result-card" style="cursor:pointer;" onclick='confirmAddCD(${cdJson})'>
-        ${cover ? `<img class="scan-result-img" src="${cover}" alt="" style="width:42px;height:56px;border-radius:6px;object-fit:cover;flex-shrink:0;">` : `<div class="scan-result-img" style="width:42px;height:56px;font-size:22px;">🎬</div>`}
+      return {
+        title, artist:'', year: year ? parseInt(year) : null, genre:'',
+        cover: m.poster_path ? `https://image.tmdb.org/t/p/w342${m.poster_path}` : '',
+        thumb: m.poster_path ? `https://image.tmdb.org/t/p/w92${m.poster_path}` : '',
+        discogs:'', extId: String(m.id),
+        mediaType: isTV ? 'Série' : 'DVD',
+        summary: m.overview || '', source: 'TMDB'
+      };
+    });
+    resultsDiv.innerHTML = _tmdbResults.map((cd, i) => `
+      <div class="scan-result-card" style="cursor:pointer;" onclick="pickTmdbResult(${i})">
+        ${cd.thumb
+          ? `<img src="${cd.thumb}" alt="" style="width:42px;height:56px;border-radius:6px;object-fit:cover;flex-shrink:0;">`
+          : `<div class="scan-result-img" style="width:42px;height:56px;font-size:22px;">🎬</div>`}
         <div class="scan-result-info">
-          <div class="scan-result-title">${title}</div>
-          <div class="scan-result-artist">${isTV?'Série':'Film'}${year?' · '+year:''}</div>
+          <div class="scan-result-title">${cd.title}</div>
+          <div class="scan-result-artist">${cd.mediaType}${cd.year ? ' · '+cd.year : ''}</div>
         </div>
-      </div>`;
-    }).join('');
-  } catch(e) { resultsDiv.innerHTML = '<div style="font-size:12px;color:var(--accent2);">Erreur de connexion.</div>'; }
+      </div>`).join('');
+  } catch(e) {
+    resultsDiv.innerHTML = '<div style="font-size:12px;color:var(--accent2);">Erreur de connexion.</div>';
+  }
+}
+
+function pickTmdbResult(i) {
+  const cd = _tmdbResults[i]; if (!cd) return;
+  confirmAddCD(cd);
 }
 
 function showFoundResult(cd) {
