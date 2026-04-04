@@ -587,10 +587,10 @@ function detectFormat(headerLine, isTsv) {
   const h = headerLine.toLowerCase();
   // BDthèque : TSV avec colonnes françaises
   if (isTsv && (h.includes('série') || h.includes('tome') || h.includes('éditeur'))) return 'bd';
-  // MovieBuddy : colonnes spécifiques
-  if (h.includes('content type') || h.includes('tmdb id') || h.includes('directors')) return 'movie';
-  // MusicBuddy : colonnes spécifiques
+  // MusicBuddy : colonnes spécifiques — testé AVANT MovieBuddy car "content type" existe dans les deux
   if (h.includes('discogs release id') || (h.includes('tracks') && h.includes('artist'))) return 'music';
+  // MovieBuddy : colonnes vraiment spécifiques (pas "content type" seul qui existe aussi dans MusicBuddy)
+  if (h.includes('tmdb id') || h.includes('directors') || (h.includes('content type') && !h.includes('discogs') && !h.includes('tracks'))) return 'movie';
   // BookBuddy : colonnes spécifiques
   if (h.includes('number of pages') || h.includes('year published') || h.includes('author')) return 'book';
   return null; // format inconnu
@@ -693,14 +693,35 @@ function importCSV(event) {
             added: i
           });
         }
-        // Préserve les médias non-musicaux et les couvertures déjà résolues
+        // Fusion safe : ajoute les nouveaux, met à jour les existants, ne supprime rien
         const MUSIC_TYPES_IMP = ['CD','Vinyle','MP3'];
-        const existingNonMusic = cds.filter(c => !MUSIC_TYPES_IMP.includes(c.mediaType||'CD'));
-        const previousMusicCovers = {};
-        cds.filter(c => MUSIC_TYPES_IMP.includes(c.mediaType||'CD'))
-           .forEach(c => { if (c.discogs && c.cover) previousMusicCovers[c.discogs] = c.cover; });
-        imported.forEach(c => { if (!c.cover && c.discogs && previousMusicCovers[c.discogs]) c.cover = previousMusicCovers[c.discogs]; });
-        cds = [...existingNonMusic, ...imported];
+        const norm = s => (s||'').toLowerCase().replace(/\s+/g,' ').trim();
+        // Indexe les existants par discogs ID (le plus fiable) ou titre+artiste
+        const byDiscogs = {}, byTitleArtist = {};
+        cds.filter(c => MUSIC_TYPES_IMP.includes(c.mediaType||'CD')).forEach(c => {
+          if (c.discogs) byDiscogs[c.discogs] = c;
+          byTitleArtist[norm(c.title)+'|'+norm(c.artist)] = c;
+        });
+        let added = 0, updated = 0;
+        imported.forEach(c => {
+          const existing = (c.discogs && byDiscogs[c.discogs]) || byTitleArtist[norm(c.title)+'|'+norm(c.artist)];
+          if (existing) {
+            // Met à jour les métadonnées mais préserve la couverture résolue et les favoris
+            existing.title  = c.title  || existing.title;
+            existing.artist = c.artist || existing.artist;
+            existing.year   = c.year   || existing.year;
+            existing.genre  = c.genre  || existing.genre;
+            existing.tracks = c.tracks.length ? c.tracks : existing.tracks;
+            existing.notes  = c.notes  || existing.notes;
+            existing.rating = c.rating || existing.rating;
+            if (!existing.cover && c.cover) existing.cover = c.cover;
+            if (c.discogs) existing.discogs = c.discogs;
+            updated++;
+          } else {
+            cds.push(c);
+            added++;
+          }
+        });
         allGenres = [...new Set(cds.map(c=>c.genre).filter(Boolean))].sort();
         renderGenreChips();
         document.getElementById('progress-fill').style.width = '90%';
@@ -708,11 +729,11 @@ function importCSV(event) {
         saveLibrary();
         setTimeout(() => {
           document.getElementById('progress-fill').style.width = '100%';
-          document.getElementById('load-status').textContent = `${imported.length} médias importés !`;
+          document.getElementById('load-status').textContent = `${added} ajoutés, ${updated} mis à jour !`;
           event.target.value = '';
           setTimeout(() => {
             document.getElementById('import-progress').style.display = 'none';
-            showNotif(`✅ ${imported.length} médias importés !`);
+            showNotif(`✅ ${added} ajoutés, ${updated} mis à jour !`);
             showScreen('screen-list');
           }, 600);
         }, 800);
@@ -813,13 +834,34 @@ function importMovieCSV(event) {
             added: i
           });
         }
-        const existing = cds.filter(c => !['DVD','Blu-ray','Série'].includes(c.mediaType));
-        // Préserve les couvertures déjà résolues lors d'un ré-import
-        const previousFilms = cds.filter(c => ['DVD','Blu-ray','Série'].includes(c.mediaType));
-        const previousCovers = {};
-        previousFilms.forEach(c => { if (c.extId && c.cover && !c.cover.startsWith('__tmdb__')) previousCovers[c.extId] = c.cover; });
-        imported.forEach(c => { if (!c.cover || c.cover.startsWith('__tmdb__')) { if (c.extId && previousCovers[c.extId]) c.cover = previousCovers[c.extId]; } });
-        cds = [...existing, ...imported];
+        // Fusion safe : ajoute les nouveaux, met à jour les existants, ne supprime rien
+        const VIDEO_TYPES_IMP = ['DVD','Blu-ray','Série'];
+        const normV = s => (s||'').toLowerCase().replace(/\s+/g,' ').trim();
+        const byExtId = {}, byTitleV = {};
+        cds.filter(c => VIDEO_TYPES_IMP.includes(c.mediaType||'')).forEach(c => {
+          if (c.extId) byExtId[c.extId] = c;
+          byTitleV[normV(c.title)] = c;
+        });
+        let addedV = 0, updatedV = 0;
+        imported.forEach(c => {
+          const existing = (c.extId && byExtId[c.extId]) || byTitleV[normV(c.title)];
+          if (existing) {
+            existing.title   = c.title   || existing.title;
+            existing.artist  = c.artist  || existing.artist;
+            existing.year    = c.year    || existing.year;
+            existing.genre   = c.genre   || existing.genre;
+            existing.summary = c.summary || existing.summary;
+            existing.runtime = c.runtime || existing.runtime;
+            existing.rating  = c.rating  || existing.rating;
+            existing.notes   = c.notes   || existing.notes;
+            if (!existing.cover || existing.cover.startsWith('__tmdb__')) existing.cover = c.cover || existing.cover;
+            if (c.extId) existing.extId = c.extId;
+            updatedV++;
+          } else {
+            cds.push(c);
+            addedV++;
+          }
+        });
         allGenres = [...new Set(cds.map(c=>c.genre).filter(Boolean))].sort();
         renderGenreChips();
         document.getElementById('progress-fill').style.width = '90%';
@@ -827,12 +869,12 @@ function importMovieCSV(event) {
         saveLibrary();
         setTimeout(() => {
           document.getElementById('progress-fill').style.width = '100%';
-          document.getElementById('load-status').textContent = `${imported.length} films/séries importés !`;
+          document.getElementById('load-status').textContent = `${addedV} ajoutés, ${updatedV} mis à jour !`;
           event.target.value = '';
           setTimeout(() => {
             document.getElementById('import-progress').style.display = 'none';
-            showNotif(`✅ ${imported.length} films importés !`);
-            resolveTmdbCovers(imported);
+            showNotif(`✅ ${addedV} ajoutés, ${updatedV} mis à jour !`);
+            resolveTmdbCovers(imported.filter(c => c.cover?.startsWith('__tmdb__')));
             showScreen('screen-list');
           }, 600);
         }, 800);
@@ -1035,24 +1077,34 @@ async function resolveTmdbCovers(items) {
 
 
 function finalizeImport(imported, event, label) {
-  const importedIds = new Set(imported.map(c=>c.id));
-  // Préserve les couvertures déjà résolues (Open Library, etc.) lors d'un ré-import
+  // Clé de déduplication : titre + artiste normalisés (insensible à la casse/espaces)
+  const normalize = s => (s||'').toLowerCase().replace(/\s+/g,' ').trim();
+  const existingKeys = new Set(cds.map(c => normalize(c.title) + '|' + normalize(c.artist)));
+
+  // Ne garde que les éléments vraiment nouveaux
+  const truly_new = imported.filter(c => !existingKeys.has(normalize(c.title) + '|' + normalize(c.artist)));
+  const skipped = imported.length - truly_new.length;
+
+  // Préserve les couvertures déjà résolues pour les éléments mis à jour
   const previousCoversById = {};
   cds.forEach(c => { if (c.extId && c.cover && !c.cover.startsWith('__ol__') && !c.cover.startsWith('__tmdb__')) previousCoversById[c.extId] = c.cover; });
-  imported.forEach(c => { if ((!c.cover || c.cover.startsWith('__ol__')) && c.extId && previousCoversById[c.extId]) c.cover = previousCoversById[c.extId]; });
-  cds = [...cds.filter(c => !importedIds.has(c.id)), ...imported];
+  truly_new.forEach(c => { if ((!c.cover || c.cover.startsWith('__ol__')) && c.extId && previousCoversById[c.extId]) c.cover = previousCoversById[c.extId]; });
+
+  // Ajoute uniquement les nouveaux
+  cds = [...cds, ...truly_new];
   allGenres = [...new Set(cds.map(c=>c.genre).filter(Boolean))].sort();
   renderGenreChips();
   document.getElementById('progress-fill').style.width = '90%';
+  const skipMsg = skipped > 0 ? ` (${skipped} déjà présents ignorés)` : '';
   document.getElementById('load-status').textContent = 'Sauvegarde locale…';
   saveLibrary();
   setTimeout(() => {
     document.getElementById('progress-fill').style.width = '100%';
-    document.getElementById('load-status').textContent = imported.length+' '+label+' importés !';
+    document.getElementById('load-status').textContent = truly_new.length + ' ' + label + ' importés' + skipMsg + ' !';
     if (event && event.target) event.target.value = '';
     setTimeout(() => {
       document.getElementById('import-progress').style.display = 'none';
-      showNotif('✅ '+imported.length+' '+label+' importés !');
+      showNotif('✅ ' + truly_new.length + ' ' + label + ' importés' + skipMsg + ' !');
       showScreen('screen-list');
     }, 600);
   }, 800);
