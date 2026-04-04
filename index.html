@@ -367,10 +367,32 @@
       </div>
 
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;">
-        <div style="font-size:13px;font-weight:700;margin-bottom:10px;">📚 Collection</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px;">📚 Gestion de la collection</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:12px;">
+          Exportez ou effacez votre collection par catégorie. L'export génère un fichier CSV téléchargeable.
+        </div>
+
+        <!-- Toute la collection -->
+        <div style="font-size:11px;font-family:'Space Mono',monospace;color:var(--muted);margin-bottom:6px;letter-spacing:0.5px;">TOUTE LA COLLECTION</div>
+        <div style="display:flex;gap:8px;margin-bottom:14px;">
+          <button class="btn-action" onclick="exportCSV()" style="flex:1;">⬇ Exporter tout</button>
+          <button class="btn-action danger" onclick="clearCategory('all')" style="flex:1;">🗑 Tout effacer</button>
+        </div>
+
+        <!-- Par catégorie -->
+        <div style="font-size:11px;font-family:'Space Mono',monospace;color:var(--muted);margin-bottom:8px;letter-spacing:0.5px;">PAR CATÉGORIE</div>
         <div style="display:flex;flex-direction:column;gap:8px;">
-          <button class="btn-action" onclick="exportCSV()" style="width:100%;">⬇ Exporter en CSV</button>
-          <button class="btn-action danger" onclick="clearLibrary()" style="width:100%;">🗑 Effacer toute la collection</button>
+          ${[
+            ['music',  '🎵 Musique',  ['CD','Vinyle','MP3']],
+            ['video',  '🎬 Vidéo',    ['DVD','Blu-ray','Série']],
+            ['books',  '📚 Livres',   ['Livre','Roman']],
+            ['bd',     '🎨 BD/Manga', ['BD','Manga','Comics']],
+          ].map(([key, label, _]) => `
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="flex:1;font-size:13px;font-weight:600;">${label}</span>
+            <button class="btn-action" onclick="exportCSV('${key}')" style="padding:8px 12px;font-size:12px;">⬇</button>
+            <button class="btn-action danger" onclick="clearCategory('${key}')" style="padding:8px 12px;font-size:12px;">🗑</button>
+          </div>`).join('')}
         </div>
       </div>
 
@@ -1926,35 +1948,75 @@ function renderStats() {
   const topD=Object.entries(dMap).sort((a,b)=>b[1]-a[1])[0];
   const aMap={};cds.forEach(c=>{if(c.artist)aMap[c.artist]=(aMap[c.artist]||0)+1;});
   const topA=Object.entries(aMap).sort((a,b)=>b[1]-a[1])[0];
+  // Comptages par catégorie
+  const counts = {
+    music: cds.filter(c=>['CD','Vinyle','MP3'].includes(c.mediaType||'CD')).length,
+    video: cds.filter(c=>['DVD','Blu-ray','Série'].includes(c.mediaType||'')).length,
+    books: cds.filter(c=>['Livre','Roman'].includes(c.mediaType||'')).length,
+    bd:    cds.filter(c=>['BD','Manga','Comics'].includes(c.mediaType||'')).length,
+  };
   document.getElementById('stats-content').innerHTML=`
     <div class="stats-hero"><div class="stats-number">${cds.length}</div><div class="stats-label">médias dans la collection</div></div>
     <div class="stats-grid">
+      <div class="stat-card"><div class="stat-val">🎵 ${counts.music}</div><div class="stat-key">musique</div></div>
+      <div class="stat-card"><div class="stat-val">🎬 ${counts.video}</div><div class="stat-key">vidéo</div></div>
+      <div class="stat-card"><div class="stat-val">📚 ${counts.books}</div><div class="stat-key">livres</div></div>
+      <div class="stat-card"><div class="stat-val">🎨 ${counts.bd}</div><div class="stat-key">BD / manga</div></div>
+    </div>
+    <div class="stats-grid">
       <div class="stat-card"><div class="stat-val" style="color:var(--accent)">⭐ ${favs}</div><div class="stat-key">favoris</div></div>
-      <div class="stat-card"><div class="stat-val">${totalTracks.toLocaleString('fr')}</div><div class="stat-key">pistes totales</div></div>
-      <div class="stat-card"><div class="stat-val">${avgR>0?'★ '+avgR.toFixed(1):'—'}</div><div class="stat-key">note moyenne</div></div>
-      <div class="stat-card"><div class="stat-val">${topD?topD[0]+'s':'—'}</div><div class="stat-key">décennie phare</div></div>
+      <div class="stat-card"><div class="stat-val">${totalTracks.toLocaleString('fr')}</div><div class="stat-key">pistes</div></div>
+      <div class="stat-card"><div class="stat-val">${avgR>0?'★ '+avgR.toFixed(1):'—'}</div><div class="stat-key">note moy.</div></div>
+      <div class="stat-card"><div class="stat-val">${topD?topD[0]+'s':'—'}</div><div class="stat-key">décennie</div></div>
     </div>
     ${topA?`<div class="stat-card"><div style="font-size:11px;font-family:'Space Mono',monospace;color:var(--muted);margin-bottom:6px;">ARTISTE LE PLUS REPRÉSENTÉ</div><div style="font-size:18px;font-weight:700;">${topA[0]}</div><div class="stat-key">${topA[1]} médias</div></div>`:''}
     ${topG.length?`<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;"><div style="font-size:12px;font-family:'Space Mono',monospace;color:var(--muted);margin-bottom:14px;">GENRES</div><div class="genre-bars">${topG.map(([g,n])=>`<div class="genre-row"><div class="genre-name">${g}</div><div class="genre-bar-wrap"><div class="genre-bar-fill" style="width:${Math.round(n/maxG*100)}%"></div></div><div class="genre-count">${n}</div></div>`).join('')}</div></div>`:''}
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;">
-      <button class="btn-action primary" onclick="exportCSV()">⬇ Exporter en CSV</button>
-      <button class="btn-action danger" onclick="clearLibrary()">🗑 Effacer la mémoire</button>
-    </div>
     <div style="height:80px;"></div>`;
 }
 
-async function clearLibrary() {
-  if(!confirm('Effacer toute la collection sauvegardée ?')) return;
-  await clearLibraryData();
-  cds=[]; nextId=1; allGenres=[];
-  renderGenreChips(); renderList(); showNotif('🗑 Collection effacée'); showScreen('screen-list');
+const CATEGORY_TYPES = {
+  music: ['CD','Vinyle','MP3'],
+  video: ['DVD','Blu-ray','Série'],
+  books: ['Livre','Roman'],
+  bd:    ['BD','Manga','Comics'],
+};
+const CATEGORY_LABELS = {
+  music: 'la musique', video: 'la vidéo', books: 'les livres', bd: 'les BD/Mangas', all: 'toute la collection',
+};
+
+async function clearCategory(cat) {
+  const label = CATEGORY_LABELS[cat] || 'cette catégorie';
+  if (!confirm(`Effacer ${label} de la collection ?`)) return;
+  if (cat === 'all') {
+    await clearLibraryData();
+    cds = []; nextId = 1; allGenres = [];
+  } else {
+    const types = CATEGORY_TYPES[cat] || [];
+    cds = cds.filter(c => !types.includes(c.mediaType || 'CD'));
+    allGenres = [...new Set(cds.map(c=>c.genre).filter(Boolean))].sort();
+    saveLibrary();
+  }
+  renderGenreChips(); renderList();
+  showNotif(`🗑 ${label.charAt(0).toUpperCase()+label.slice(1)} effacée`);
+  showScreen('screen-list');
 }
 
-function exportCSV() {
-  const rows = cds.map(cd => ['titre','artiste','annee','genre','notes','pochette','discogs_id'].map((_,i)=>`"${String([cd.title,cd.artist,cd.year||'',cd.genre||'',cd.notes||'',cd.cover||'',cd.discogs||''][i]).replace(/"/g,'""')}"`).join(','));
-  const blob = new Blob([['titre,artiste,annee,genre,notes,pochette,discogs_id',...rows].join('\n')],{type:'text/csv;charset=utf-8;'});
-  const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='arkiv.csv'; a.click();
-  showNotif('⬇ Export prêt !');
+function exportCSV(cat) {
+  const types = cat && cat !== 'all' ? CATEGORY_TYPES[cat] : null;
+  const data = types ? cds.filter(c => types.includes(c.mediaType || 'CD')) : cds;
+  if (!data.length) { showNotif('⚠️ Aucun média à exporter'); return; }
+  const headers = 'titre,artiste,annee,genre,support,notes,pochette,discogs_id,ext_id';
+  const rows = data.map(cd => [
+    cd.title, cd.artist, cd.year||'', cd.genre||'', cd.mediaType||'',
+    cd.notes||'', cd.cover||'', cd.discogs||'', cd.extId||''
+  ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(','));
+  const filename = cat && cat !== 'all' ? `arkiv-${cat}.csv` : 'arkiv.csv';
+  const blob = new Blob([[headers, ...rows].join('\n')], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  showNotif(`⬇ ${filename} prêt !`);
 }
 
 // ═══ OAUTH DISCOGS ═══════════════════════════════════════
