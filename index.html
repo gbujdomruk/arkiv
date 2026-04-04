@@ -149,12 +149,22 @@
   .notification.show{transform:translateX(-50%) translateY(0);}
   .discogs-link{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:8px;padding:4px 10px;margin-top:8px;}
   #csvFileInput,#csvFileInputMovie,#csvFileInputBook,#csvFileInputBd{display:none;}
+  /* LIGHTBOX POCHETTE */
+  .lightbox{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:300;display:flex;align-items:center;justify-content:center;cursor:zoom-out;opacity:0;transition:opacity .2s;}
+  .lightbox.show{opacity:1;}
+  .lightbox img{max-width:90vw;max-height:88vh;border-radius:12px;object-fit:contain;box-shadow:0 8px 40px rgba(0,0,0,0.8);transform:scale(0.92);transition:transform .25s cubic-bezier(.34,1.56,.64,1);}
+  .lightbox.show img{transform:scale(1);}
+  .lightbox-close{position:absolute;top:20px;right:20px;background:rgba(255,255,255,0.12);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
   textarea.form-input{resize:none;}
 </style>
 </head>
 <body>
 
 <div class="notification" id="notif"></div>
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+  <img id="lightbox-img" src="" alt="">
+</div>
 
 <!-- ═══ LISTE ═══ -->
 <div class="screen active" id="screen-list">
@@ -1238,43 +1248,57 @@ async function lookupBarcode(code) {
 
   // ══ 1. LIVRES / BD (ISBN uniquement) ══════════════════
   if (isISBN) {
-    try {
-      showScanStatus('searching', '🔍 Recherche livre/BD…');
 
-      // Tente avec clé si disponible, retombe sur sans-clé si 403/400/429/erreur
-      const gbKey = localStorage.getItem('gbooks_api_key') || '';
-      let data = null;
-      if (gbKey) {
-        try {
-          const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanCode}&key=${gbKey}`);
-          if (res.ok) {
-            data = await res.json();
-            // Si la clé renvoie 0 résultats, retente sans clé (clé peut restreindre)
-            if (!data?.totalItems) data = null;
-          }
-          if (!data) {
-            // 403, 400, 429 ou 0 résultats → retente sans clé
-            if (res.status === 403 || res.status === 400) {
-              console.warn('Clé Google Books invalide (', res.status, ') — effacement et retente sans clé');
-              localStorage.removeItem('gbooks_api_key');
-            }
-            const res2 = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanCode}`);
-            if (res2.ok) data = await res2.json();
-          }
-        } catch(e) {
-          const res2 = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanCode}`);
-          if (res2.ok) data = await res2.json();
-        }
-      } else {
-        const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanCode}`);
-        if (res.ok) data = await res.json();
-        // Gestion 429 : attendre 2s et réessayer une fois
-        else if (res.status === 429) {
-          await new Promise(r => setTimeout(r, 2000));
-          const res2 = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanCode}`);
-          if (res2.ok) data = await res2.json();
+    // ── A. Open Library en premier (pas de clé, pas de rate limit) ──
+    try {
+      showScanStatus('searching', '🔍 Recherche Open Library…');
+      const olRes = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${cleanCode}&format=json&jscmd=data`);
+      if (olRes.ok) {
+        const data = await olRes.json();
+        const olKey = Object.keys(data)[0];
+        if (olKey && data[olKey]) {
+          const b = data[olKey];
+          const publisher = (b.publishers || []).map(p => p.name||p||'').join(' ').toLowerCase();
+          const subjects  = (b.subjects  || []).map(s => s.name||s||'').join(' ').toLowerCase();
+          const bdPublishers = /dupuis|dargaud|lombard|casterman|glenat|glénat|delcourt|soleil|bamboo|ankama|urban|marvel|dc comics|dark horse/i;
+          const isBD = /comic|manga|bande|graphic|bd/.test(subjects)
+                    || bdPublishers.test(publisher);
+          const mediaType = isBD ? 'BD' : 'Roman';
+          // Couverture Open Library — taille L si dispo
+          const isbn13 = cleanCode;
+          const cover  = b.cover?.large || b.cover?.medium || b.cover?.small
+                      || `https://covers.openlibrary.org/b/isbn/${isbn13}-L.jpg`;
+          showFoundResult({
+            title: b.title || '',
+            artist: (b.authors || []).map(a => a.name||'').join(', '),
+            year: b.publish_date ? parseInt(b.publish_date) : null,
+            genre: isBD ? 'BD / Manga' : 'Roman',
+            mediaType, cover,
+            discogs:'', extId: b.key || '', summary: '', code, source: 'Open Library'
+          });
+          return;
         }
       }
+    } catch(e) { console.warn('Open Library error', e); }
+
+    // ── B. Google Books en fallback (rate limit possible sans clé) ──
+    try {
+      showScanStatus('searching', '🔍 Recherche Google Books…');
+      const gbKey = localStorage.getItem('gbooks_api_key') || '';
+      let data = null;
+      const gbUrl = gbKey
+        ? `https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanCode}&key=${gbKey}`
+        : `https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanCode}`;
+      try {
+        const res = await fetch(gbUrl);
+        if (res.ok) data = await res.json();
+        else if ((res.status === 403 || res.status === 400) && gbKey) {
+          localStorage.removeItem('gbooks_api_key');
+          const res2 = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanCode}`);
+          if (res2.ok) data = await res2.json();
+        }
+        // 429 → on passe directement au fallback sans attendre
+      } catch(e) {}
 
       if (data && data.totalItems > 0 && data.items?.length) {
         const item  = data.items[0];
@@ -1284,10 +1308,9 @@ async function lookupBarcode(code) {
         const year   = info.publishedDate ? parseInt(info.publishedDate) : null;
         const rawGenre = (info.categories || [''])[0] || '';
         const cover  = (info.imageLinks?.thumbnail || info.imageLinks?.smallThumbnail || '')
-                         .replace('http:','https:').replace('zoom=1','zoom=2'); // meilleure résolution
+                         .replace('http:','https:').replace('zoom=1','zoom=2');
         const extId  = item.id || '';
         const desc   = info.description || '';
-        // Détection BD/Manga élargie : catégories Google + éditeurs franco-belges connus
         const bdPublishers = /dupuis|dargaud|lombard|casterman|glenat|glénat|delcourt|soleil|bamboo|ankama|urban comics|marvel|dc comics|dark horse/i;
         const isBD = /comic|manga|bande dessinée|graphic novel|bd/i.test(rawGenre + ' ' + desc)
                   || bdPublishers.test(info.publisher || '')
@@ -1298,29 +1321,6 @@ async function lookupBarcode(code) {
         return;
       }
     } catch(e) { console.warn('Google Books error', e); }
-
-    // Fallback Open Library
-    try {
-      const olRes = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${cleanCode}&format=json&jscmd=data`);
-      if (olRes.ok) {
-        const data = await olRes.json();
-        const key = Object.keys(data)[0];
-        if (key && data[key]) {
-          const b = data[key];
-          const subjects = (b.subjects || []).map(s => (s.name||s||'').toLowerCase()).join(' ');
-          const isBD = /comic|manga|bande|graphic|bd/.test(subjects);
-          showFoundResult({
-            title:b.title||'', artist:b.authors?.[0]?.name||'',
-            year:b.publish_date?parseInt(b.publish_date):null,
-            genre: isBD ? 'BD' : 'Roman',
-            mediaType: isBD ? 'BD' : 'Roman',
-            cover:b.cover?.medium||b.cover?.large||'',
-            discogs:'', extId:'', summary:'', code, source:'Open Library'
-          });
-          return;
-        }
-      }
-    } catch(e) { console.warn('Open Library error', e); }
 
     // ISBN non trouvé nulle part
     showScanStatus('notfound', '❌ Livre/BD non trouvé. Complétez manuellement.');
@@ -1746,7 +1746,7 @@ function showDetail(id) {
   const isPortrait = ['BD','Manga','Comics','DVD','Blu-ray','Série','Livre','Roman'].includes(cd.mediaType);
   const portraitClass = isPortrait ? ' portrait' : '';
   cw.innerHTML = validCover
-    ? `<img class="detail-cover-img${portraitClass}" src="${cd.cover}" alt="" onerror="this.outerHTML='<div class=detail-cover-placeholder${portraitClass}>${getEmoji(cd.genre, cd.mediaType)}</div>'">`
+    ? `<img class="detail-cover-img${portraitClass}" src="${cd.cover}" alt="" style="cursor:zoom-in;" onclick="openLightbox('${cd.cover.replace(/'/g,"\\'")}')" onerror="this.outerHTML='<div class=detail-cover-placeholder${portraitClass}>${getEmoji(cd.genre, cd.mediaType)}</div>'">`
     : `<div class="detail-cover-placeholder${portraitClass}">${getEmoji(cd.genre, cd.mediaType)}</div>`;
   let tags = '';
   if(cd.mediaType) tags += `<span class="detail-tag" style="color:var(--accent2);border-color:rgba(255,107,53,0.3)">${cd.mediaType}</span>`;
@@ -2048,6 +2048,25 @@ function handleOAuthCallback() {
     showScreen('screen-settings');
   }
 }
+
+function openLightbox(src) {
+  if (!src) return;
+  const lb = document.getElementById('lightbox');
+  const img = document.getElementById('lightbox-img');
+  // Essaie une version haute résolution (zoom=3 pour Google Books, w500 pour TMDB)
+  const hiRes = src.replace('zoom=2','zoom=3').replace('zoom=1','zoom=3')
+                   .replace('/w342/','/w500/').replace('-M.jpg','-L.jpg');
+  img.src = hiRes;
+  img.onerror = () => { img.src = src; }; // fallback sur l'original
+  lb.classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('show');
+  document.body.style.overflow = '';
+}
+// Ferme avec Échap
+document.addEventListener('keydown', e => { if(e.key==='Escape') closeLightbox(); });
 
 function showNotif(msg){const n=document.getElementById('notif');n.textContent=msg;n.classList.add('show');setTimeout(()=>n.classList.remove('show'),2500);}
 
