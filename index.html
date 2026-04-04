@@ -372,27 +372,34 @@
           Exportez ou effacez votre collection par catégorie. L'export génère un fichier CSV téléchargeable.
         </div>
 
-        <!-- Toute la collection -->
         <div style="font-size:11px;font-family:'Space Mono',monospace;color:var(--muted);margin-bottom:6px;letter-spacing:0.5px;">TOUTE LA COLLECTION</div>
         <div style="display:flex;gap:8px;margin-bottom:14px;">
-          <button class="btn-action" onclick="exportCSV()" style="flex:1;">⬇ Exporter tout</button>
+          <button class="btn-action" onclick="exportCSV('all')" style="flex:1;">⬇ Exporter tout</button>
           <button class="btn-action danger" onclick="clearCategory('all')" style="flex:1;">🗑 Tout effacer</button>
         </div>
 
-        <!-- Par catégorie -->
         <div style="font-size:11px;font-family:'Space Mono',monospace;color:var(--muted);margin-bottom:8px;letter-spacing:0.5px;">PAR CATÉGORIE</div>
         <div style="display:flex;flex-direction:column;gap:8px;">
-          ${[
-            ['music',  '🎵 Musique',  ['CD','Vinyle','MP3']],
-            ['video',  '🎬 Vidéo',    ['DVD','Blu-ray','Série']],
-            ['books',  '📚 Livres',   ['Livre','Roman']],
-            ['bd',     '🎨 BD/Manga', ['BD','Manga','Comics']],
-          ].map(([key, label, _]) => `
           <div style="display:flex;align-items:center;gap:8px;">
-            <span style="flex:1;font-size:13px;font-weight:600;">${label}</span>
-            <button class="btn-action" onclick="exportCSV('${key}')" style="padding:8px 12px;font-size:12px;">⬇</button>
-            <button class="btn-action danger" onclick="clearCategory('${key}')" style="padding:8px 12px;font-size:12px;">🗑</button>
-          </div>`).join('')}
+            <span style="flex:1;font-size:13px;font-weight:600;">🎵 Musique</span>
+            <button class="btn-action" onclick="exportCSV('music')" style="padding:8px 14px;font-size:12px;">⬇ Exporter</button>
+            <button class="btn-action danger" onclick="clearCategory('music')" style="padding:8px 14px;font-size:12px;">🗑 Effacer</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="flex:1;font-size:13px;font-weight:600;">🎬 Vidéo</span>
+            <button class="btn-action" onclick="exportCSV('video')" style="padding:8px 14px;font-size:12px;">⬇ Exporter</button>
+            <button class="btn-action danger" onclick="clearCategory('video')" style="padding:8px 14px;font-size:12px;">🗑 Effacer</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="flex:1;font-size:13px;font-weight:600;">📚 Livres</span>
+            <button class="btn-action" onclick="exportCSV('books')" style="padding:8px 14px;font-size:12px;">⬇ Exporter</button>
+            <button class="btn-action danger" onclick="clearCategory('books')" style="padding:8px 14px;font-size:12px;">🗑 Effacer</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="flex:1;font-size:13px;font-weight:600;">🎨 BD / Manga</span>
+            <button class="btn-action" onclick="exportCSV('bd')" style="padding:8px 14px;font-size:12px;">⬇ Exporter</button>
+            <button class="btn-action danger" onclick="clearCategory('bd')" style="padding:8px 14px;font-size:12px;">🗑 Effacer</button>
+          </div>
         </div>
       </div>
 
